@@ -25,7 +25,7 @@ int main(int argc, const char * argv[]) {
 
     unsigned char tx_buffer[9];
 
-    int matricula = 7003;
+    char matricula[4] = {7, 0, 0, 3};
 
     int option;
     printf("\nEnter the option choose:\n");
