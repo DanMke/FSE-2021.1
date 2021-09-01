@@ -3,6 +3,7 @@
 #include <unistd.h>         //Used for UART
 #include <fcntl.h>          //Used for UART
 #include <termios.h>        //Used for UART
+#include <crc16.h>
 
 int main(int argc, const char * argv[]) {
 
@@ -25,8 +26,6 @@ int main(int argc, const char * argv[]) {
 
     unsigned char tx_buffer[9];
 
-    char matricula[4] = {7, 0, 0, 3};
-
     int option;
     printf("\nEnter the option choose:\n");
     printf("\nOption 161: ENVIA INT\n");
@@ -38,36 +37,66 @@ int main(int argc, const char * argv[]) {
     scanf("%d", &option);
 
     if (option == 161) {
-        tx_buffer[0] = 0xB1;
-        int data = 8521;
+        tx_buffer[0] = 0x01;
+        tx_buffer[1] = 0x16;
+        tx_buffer[2] = 0xB1;
+        int data = 7003;
 
-        memcpy(&tx_buffer[1], &data, 4);
-        memcpy(&tx_buffer[5], &matricula, 4);
+        memcpy(&tx_buffer[3], &data, 4);
+
+        short crc = calcula_CRC(tx_buffer, 7);
+
+        memcpy(&tx_buffer[7], &crc, 2);
     } else if (option == 162) {
-        tx_buffer[0] = 0xB2;
-        float data = 8521;
+        tx_buffer[0] = 0x01;
+        tx_buffer[1] = 0x16;
+        tx_buffer[2] = 0xB2;
+        float data = 7003;
 
-        memcpy(&tx_buffer[1], &data, 4);
-        memcpy(&tx_buffer[5], &matricula, 4);
+        memcpy(&tx_buffer[3], &data, 4);
+
+        short crc = calcula_CRC(tx_buffer, 7);
+
+        memcpy(&tx_buffer[7], &crc, 2);
     } else if (option == 163) {
-        tx_buffer[0] = 0xB3;
-        tx_buffer[1] = 3;
-        char data[3] = {'H', 'd', '\0'};
+        tx_buffer[0] = 0x01;
+        tx_buffer[1] = 0x16;
+        tx_buffer[2] = 0xB3;
+        tx_buffer[3] = 3;
 
-        memcpy(&tx_buffer[2], &data, 3);
-        memcpy(&tx_buffer[5], &matricula, 4);
+        char data[3] = {'H', 'D', 'A'};
+
+        memcpy(&tx_buffer[4], &data, 3);
+
+        short crc = calcula_CRC(tx_buffer, 7);
+
+        memcpy(&tx_buffer[7], &crc, 2);
     } else if (option == 1611) {
+        tx_buffer[0] = 0x01;
+        tx_buffer[1] = 0x23;
+        tx_buffer[2] = 0xA1;
 
-        tx_buffer[0] = 0xA1;
-        memcpy(&tx_buffer[1], &matricula, 4);
+        short crc = calcula_CRC(tx_buffer, 3);
+
+        memcpy(&tx_buffer[3], &crc, 2);
     } else if (option == 1621) {
 
-        tx_buffer[0] = 0xA2;
-        memcpy(&tx_buffer[1], &matricula, 4);
+        tx_buffer[0] = 0x01;
+        tx_buffer[1] = 0x23;
+        tx_buffer[2] = 0xA2;
+
+        short crc = calcula_CRC(tx_buffer, 3);
+
+        memcpy(&tx_buffer[3], &crc, 2);
     } else if (option == 1631) {
 
-        tx_buffer[0] = 0xA3;
-        memcpy(&tx_buffer[1], &matricula, 4);
+        tx_buffer[0] = 0x01;
+        tx_buffer[1] = 0x23;
+        tx_buffer[2] = 0xA3;
+
+        short crc = calcula_CRC(tx_buffer, 3);
+
+        memcpy(&tx_buffer[3], &crc, 2);
     } else {
         printf("\nOption not exists\n");
         close(uart0_filestream);
@@ -99,6 +128,16 @@ int main(int argc, const char * argv[]) {
         } else if (rx_length == 0) {
             printf("Nenhum dado disponível.\n"); //No data waiting
         } else {
+
+            short crc = calcula_CRC(rx_buffer, rx_length - 2);
+            short oldCrc;
+            memcpy(&oldCrc, rx_buffer + (rx_length - 2), 2);
+
+            if (crc != oldCrc) {
+                close(uart0_filestream);
+                return 0;
+            }
+
             //Bytes received
             rx_buffer[rx_length] = '\0';
 
