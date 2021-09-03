@@ -1,25 +1,3 @@
-/**\
- * Copyright (c) 2020 Bosch Sensortec GmbH. All rights reserved.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- **/
-
-/**
- * \ingroup bme280
- * \defgroup bme280Examples Examples
- * @brief Reference Examples
- */
-
-/*!
- * @ingroup bme280Examples
- * @defgroup bme280GroupExampleLU linux_userspace
- * @brief Linux userspace test code, simple and mose code directly from the doco.
- * compile like this: gcc linux_userspace.c ../bme280.c -I ../ -o bme280
- * tested: Raspberry Pi.
- * Use like: ./bme280 /dev/i2c-0
- * \include linux_userspace.c
- */
-
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
 
