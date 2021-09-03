@@ -23,8 +23,6 @@
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
 
-/******************************************************************************/
-/*!                         System header files                               */
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,8 +33,8 @@
 #include <wiringPiI2C.h>
 #include <wiringPi.h>
 
-#include <fcntl.h>          //Used for UART
-#include <termios.h>        //Used for UART
+#include <fcntl.h>
+#include <termios.h>
 
 #include "bme280.h"
 #include "i2clcd.h"
@@ -46,9 +44,6 @@
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream);
 
-/*!
- * @brief This function starts execution of the program.
- */
 int main(int argc, char* argv[]) {
 
     struct bme280_dev dev;
@@ -65,7 +60,6 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    /* Make sure to select BME280_I2C_ADDR_PRIM or BME280_I2C_ADDR_SEC as needed */
     id.dev_addr = BME280_I2C_ADDR_PRIM;
 
     if (ioctl(id.fd, I2C_SLAVE, id.dev_addr) < 0) {
@@ -78,13 +72,10 @@ int main(int argc, char* argv[]) {
     dev.write = user_i2c_write;
     dev.delay_us = user_delay_us;
 
-    /* Update interface pointer with the structure that contains both device address and file descriptor */
     dev.intf_ptr = &id;
 
-    /* Variable to define the result */
     int8_t rslt = BME280_OK;
 
-    /* Initialize the bme280 */
     rslt = bme280_init(&dev);
     if (rslt != BME280_OK) {
         fprintf(stderr, "Failed to initialize the device (code %+d).\n", rslt);
@@ -111,11 +102,6 @@ int main(int argc, char* argv[]) {
 
     int uart0_filestream = initialize_uart();
 
-
-    //----- CHECK FOR ANY RX BYTES -----
-
-
-
     // ----------   loop -----------------
 
     loop(dev, fd, uart0_filestream);
@@ -126,7 +112,6 @@ int main(int argc, char* argv[]) {
 }
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
-    /* Structure to get the pressure, temperature and humidity values */
     struct bme280_data comp_data;
 
     while (1) {
