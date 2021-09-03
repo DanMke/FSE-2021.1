@@ -1664,3 +1664,66 @@ void print_sensor_data(struct bme280_data *comp_data)
 #endif
     printf("%0.2lf deg C, %0.2lf hPa, %0.2lf%%\n", temp, press, hum);
 }
+
+/*!
+ * @brief This API reads the sensor temperature, pressure and humidity data in forced mode.
+ */
+int8_t stream_sensor_data_forced_mode(struct bme280_dev *dev)
+{
+    /* Variable to define the result */
+    int8_t rslt = BME280_OK;
+
+    /* Variable to define the selecting sensors */
+    uint8_t settings_sel = 0;
+
+    /* Recommended mode of operation: Indoor navigation */
+    dev->settings.osr_h = BME280_OVERSAMPLING_1X;
+    dev->settings.osr_p = BME280_OVERSAMPLING_16X;
+    dev->settings.osr_t = BME280_OVERSAMPLING_2X;
+    dev->settings.filter = BME280_FILTER_COEFF_16;
+
+    settings_sel = BME280_OSR_PRESS_SEL | BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL | BME280_FILTER_SEL;
+
+    /* Set the sensor settings */
+    rslt = bme280_set_sensor_settings(settings_sel, dev);
+    if (rslt != BME280_OK)
+    {
+        fprintf(stderr, "Failed to set sensor settings (code %+d).", rslt);
+
+        return rslt;
+    }
+
+    return rslt;
+}
+
+int8_t get_data_from_bme280(struct bme280_dev *dev, struct bme280_data *comp_data) {
+
+    /* Variable to store minimum wait time between consecutive measurement in force mode */
+    /*Calculate the minimum delay required between consecutive measurement based upon the sensor enabled
+     *  and the oversampling configuration. */
+    uint32_t req_delay = bme280_cal_meas_delay(&dev->settings);
+
+    /* Continuously stream sensor data */
+    /* Set the sensor to forced mode */
+    int8_t rslt = bme280_set_sensor_mode(BME280_FORCED_MODE, dev);
+    if (rslt != BME280_OK)
+    {
+        fprintf(stderr, "Failed to set sensor mode (code %+d).", rslt);
+        return rslt;
+    }
+
+    /* Wait for the measurement to complete and print data */
+    dev->delay_us(req_delay, dev->intf_ptr);
+    rslt = bme280_get_sensor_data(BME280_ALL, comp_data, dev);
+    if (rslt != BME280_OK)
+    {
+        fprintf(stderr, "Failed to get sensor data (code %+d).", rslt);
+        return rslt;
+    }
+
+    printf("Temperature, Pressure, Humidity\n");
+
+    print_sensor_data(comp_data);
+
+    return rslt;
+}

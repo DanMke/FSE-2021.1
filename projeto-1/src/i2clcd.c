@@ -19,6 +19,23 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+void show_in_lcd(int fd, float externalTemperature, float referenceTemperature, float internalTemperature) {
+    ClrLcd(fd);
+
+    lcdLoc(LINE1, fd);
+    typeln("TE", fd);
+    typeFloat(externalTemperature, fd);
+
+    typeln(" TR", fd);
+    typeFloat(referenceTemperature, fd);
+
+    lcdLoc(LINE2, fd);
+    typeln("TI", fd);
+    typeFloat(internalTemperature, fd);
+
+    delay(2000);
+}
+
 // float to string
 void typeFloat(float myFloat, int fd)   {
     char buffer[20];

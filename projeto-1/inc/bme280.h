@@ -449,6 +449,10 @@ int8_t user_i2c_read(uint8_t reg_addr, uint8_t *data, uint32_t len, void *intf_p
  */
 int8_t user_i2c_write(uint8_t reg_addr, const uint8_t *data, uint32_t len, void *intf_ptr);
 
+int8_t stream_sensor_data_forced_mode(struct bme280_dev *dev);
+
+int8_t get_data_from_bme280(struct bme280_dev *dev, struct bme280_data *comp_data);
+
 /* Structure that contains identifier details used in example */
 struct identifier {
     /* Variable to hold device address */

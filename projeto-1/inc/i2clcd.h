@@ -28,4 +28,6 @@ void ClrLcd(int fd); // clr LCD return home
 void typeln(const char *s, int fd);
 void typeChar(char val, int fd);
 
+void show_in_lcd(int fd, float externalTemperature, float referenceTemperature, float internalTemperature);
+
 #endif //I2CLCD_H_
