@@ -61,7 +61,9 @@ void showInLCD(int fd, float externalTemperature, float referenceTemperature, fl
  */
 int8_t stream_sensor_data_forced_mode(struct bme280_dev *dev);
 
-void loop(int8_t rslt, struct bme280_dev *dev, int fd);
+int8_t get_data_from_bme280(struct bme280_dev *dev, struct bme280_data *comp_data);
+
+void loop(struct bme280_dev dev, int fd);
 
 /*!
  * @brief This function starts execution of the program.
@@ -124,7 +126,7 @@ int main(int argc, char* argv[]) {
 
     lcd_init(fd); // setup LCD
 
-    // ----------   loop -----------------
+    // ----------   modbus -----------------
 
     int uart0_filestream = -1;
 
@@ -144,13 +146,14 @@ int main(int argc, char* argv[]) {
     tcsetattr(uart0_filestream, TCSANOW, &options);
 
     unsigned char tx_buffer[9];
-    char matricula[4] = {7, 0, 0, 3};
 
     tx_buffer[0] = 0x01;
     tx_buffer[1] = 0x23;
     tx_buffer[2] = 0xC1;
 
-    memcpy(&tx_buffer[3], &matricula, 4);
+    char university_registration[4] = {7, 0, 0, 3};
+
+    memcpy(&tx_buffer[3], &university_registration, 4);
 
     short crc = calcula_CRC(tx_buffer, 7);
 
@@ -187,7 +190,7 @@ int main(int argc, char* argv[]) {
 
             if (crc != oldCrc) {
                 close(uart0_filestream);
-                return 0;
+                exit(1);
             }
 
             //Bytes received
@@ -207,7 +210,7 @@ int main(int argc, char* argv[]) {
 
     // ----------   loop -----------------
 
-    loop(rslt, &dev, fd);
+    loop(dev, fd);
 
     return 0;
 }
@@ -232,7 +235,8 @@ void showInLCD(int fd, float externalTemperature, float referenceTemperature, fl
 /*!
  * @brief This API reads the sensor temperature, pressure and humidity data in forced mode.
  */
-int8_t stream_sensor_data_forced_mode(struct bme280_dev *dev) {
+int8_t stream_sensor_data_forced_mode(struct bme280_dev *dev)
+{
     /* Variable to define the result */
     int8_t rslt = BME280_OK;
 
@@ -259,41 +263,56 @@ int8_t stream_sensor_data_forced_mode(struct bme280_dev *dev) {
     return rslt;
 }
 
-void loop(int8_t rslt, struct bme280_dev *dev, int fd) {
-    /* Structure to get the pressure, temperature and humidity values */
-    struct bme280_data comp_data;
+int8_t get_data_from_bme280(struct bme280_dev *dev, struct bme280_data *comp_data) {
+
     /* Variable to store minimum wait time between consecutive measurement in force mode */
     /*Calculate the minimum delay required between consecutive measurement based upon the sensor enabled
      *  and the oversampling configuration. */
     uint32_t req_delay = bme280_cal_meas_delay(&dev->settings);
 
     /* Continuously stream sensor data */
+    /* Set the sensor to forced mode */
+    int8_t rslt = bme280_set_sensor_mode(BME280_FORCED_MODE, dev);
+    if (rslt != BME280_OK)
+    {
+        fprintf(stderr, "Failed to set sensor mode (code %+d).", rslt);
+        return rslt;
+    }
+
+    /* Wait for the measurement to complete and print data */
+    dev->delay_us(req_delay, dev->intf_ptr);
+    rslt = bme280_get_sensor_data(BME280_ALL, comp_data, dev);
+    if (rslt != BME280_OK)
+    {
+        fprintf(stderr, "Failed to get sensor data (code %+d).", rslt);
+        return rslt;
+    }
+
+    printf("Temperature, Pressure, Humidity\n");
+
+    print_sensor_data(comp_data);
+
+    return rslt;
+}
+
+void loop(struct bme280_dev dev, int fd) {
+    /* Structure to get the pressure, temperature and humidity values */
+    struct bme280_data comp_data;
+
     while (1) {
-        /* Set the sensor to forced mode */
-        rslt = bme280_set_sensor_mode(BME280_FORCED_MODE, dev);
-        if (rslt != BME280_OK)
-        {
-            fprintf(stderr, "Failed to set sensor mode (code %+d).", rslt);
-            break;
+        int8_t rslt = get_data_from_bme280(&dev, &comp_data);
+        if (rslt != BME280_OK) {
+            fprintf(stderr, "Failed to stream sensor data (code %+d).\n", rslt);
+            exit(1);
         }
 
-        /* Wait for the measurement to complete and print data */
-        dev->delay_us(req_delay, dev->intf_ptr);
-        rslt = bme280_get_sensor_data(BME280_ALL, &comp_data, dev);
-        if (rslt != BME280_OK)
-        {
-            fprintf(stderr, "Failed to get sensor data (code %+d).", rslt);
-            break;
-        }
-
-        printf("Temperature, Pressure, Humidity\n");
-        print_sensor_data(&comp_data);
-        sleep(1);
+        printf("testando %0.2lf deg C\n", comp_data.temperature);
 
         float externalTemperature = 25.55;
         float referenceTemperature = 26.66;
         float internalTemperature = 27.77;
         showInLCD(fd, externalTemperature, referenceTemperature, internalTemperature);
-        sleep(1);
+
+        sleep(2);
     }
 }
