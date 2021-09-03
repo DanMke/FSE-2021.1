@@ -35,10 +35,14 @@
 #include <wiringPiI2C.h>
 #include <wiringPi.h>
 
+#include <fcntl.h>          //Used for UART
+#include <termios.h>        //Used for UART
+
 /******************************************************************************/
 /*!                         Own header files                                  */
 #include "bme280.h"
 #include "i2clcd.h"
+#include "crc16.h"
 
 void showInLCD(int fd, float externalTemperature, float referenceTemperature, float internalTemperature);
 
@@ -119,6 +123,89 @@ int main(int argc, char* argv[]) {
     int fd = wiringPiI2CSetup(I2C_ADDR);
 
     lcd_init(fd); // setup LCD
+
+    // ----------   loop -----------------
+
+    int uart0_filestream = -1;
+
+    uart0_filestream = open("/dev/serial0", O_RDWR | O_NOCTTY | O_NDELAY);      //Open in non blocking read/write mode
+    if (uart0_filestream == -1) {
+        printf("Erro - Não foi possível iniciar a UART.\n");
+    } else {
+        printf("UART inicializada!\n");
+    }
+    struct termios options;
+    tcgetattr(uart0_filestream, &options);
+    options.c_cflag = B9600 | CS8 | CLOCAL | CREAD;     //<Set baud rate
+    options.c_iflag = IGNPAR;
+    options.c_oflag = 0;
+    options.c_lflag = 0;
+    tcflush(uart0_filestream, TCIFLUSH);
+    tcsetattr(uart0_filestream, TCSANOW, &options);
+
+    unsigned char tx_buffer[9];
+    char matricula[4] = {7, 0, 0, 3};
+
+    tx_buffer[0] = 0x01;
+    tx_buffer[1] = 0x23;
+    tx_buffer[2] = 0xC1;
+
+    memcpy(&tx_buffer[3], &matricula, 4);
+
+    short crc = calcula_CRC(tx_buffer, 7);
+
+    memcpy(&tx_buffer[7], &crc, 2);
+
+    printf("Buffers de memória criados!\n");
+
+    if (uart0_filestream != -1) {
+        printf("Escrevendo caracteres na UART ...");
+
+        int count = write(uart0_filestream, tx_buffer, 9);
+        if (count < 0) {
+            printf("UART TX error\n");
+        } else {
+            printf("escrito.\n");
+        }
+    }
+
+    sleep(2);
+
+    //----- CHECK FOR ANY RX BYTES -----
+    if (uart0_filestream != -1) {
+        // Read up to 255 characters from the port if they are there
+        unsigned char rx_buffer[9];
+        int rx_length = read(uart0_filestream, (void*)rx_buffer, 255);      //Filestream, buffer to store in, number of bytes to read (max)
+        if (rx_length < 0) {
+            printf("Erro na leitura.\n"); //An error occured (will occur if there are no bytes)
+        } else if (rx_length == 0) {
+            printf("Nenhum dado disponível.\n"); //No data waiting
+        } else {
+            short crc = calcula_CRC(rx_buffer, rx_length - 2);
+            short oldCrc;
+            memcpy(&oldCrc, rx_buffer + (rx_length - 2), 2);
+
+            if (crc != oldCrc) {
+                close(uart0_filestream);
+                return 0;
+            }
+
+            //Bytes received
+            rx_buffer[rx_length] = '\0';
+//            int currentInteger;
+//            memcpy(&currentInteger, rx_buffer, rx_length);
+//            printf("INT %d: %d\n", rx_length, currentInteger);
+//            printf("%i Bytes lidos : %d\n", rx_length, currentInteger);
+            float currentFloat;
+            memcpy(&currentFloat, rx_buffer+3, 4);
+            printf("FLOAT %d: %f\n", rx_length, currentFloat);
+            printf("%i Bytes lidos : %f\n", rx_length, currentFloat);
+        }
+    }
+
+    close(uart0_filestream);
+
+    // ----------   loop -----------------
 
     loop(rslt, &dev, fd);
 
