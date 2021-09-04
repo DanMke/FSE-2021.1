@@ -19,6 +19,7 @@
 #include "crc16.h"
 #include "uart_modbus.h"
 
+const char I2C_BUS_ARGUMENT[] = "/dev/i2c-1";
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream);
 
@@ -28,12 +29,7 @@ int main(int argc, char* argv[]) {
 
     struct identifier id;
 
-    if (argc < 2) {
-        fprintf(stderr, "Missing argument for i2c bus.\n");
-        exit(1);
-    }
-
-    if ((id.fd = open(argv[1], O_RDWR)) < 0) {
+    if ((id.fd = open(I2C_BUS_ARGUMENT, O_RDWR)) < 0) {
         fprintf(stderr, "Failed to open the i2c bus %s\n", argv[1]);
         exit(1);
     }

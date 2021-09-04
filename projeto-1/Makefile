@@ -22,4 +22,4 @@ clean:
 	-rm -f $(OBJDIR)/*.o $(EXE)
 
 run:
-	${EXE} /dev/i2c-1
+	${EXE}
