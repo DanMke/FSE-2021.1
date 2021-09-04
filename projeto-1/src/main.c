@@ -19,14 +19,12 @@
 #include "crc16.h"
 #include "uart_modbus.h"
 
-const char I2C_BUS_ARGUMENT[] = "/dev/i2c-1";
-
 void loop(struct bme280_dev dev, int fd, int uart0_filestream);
 
 int main(int argc, char* argv[]) {
-
+    // ---------- BME280
+    const char I2C_BUS_ARGUMENT[] = "/dev/i2c-1";
     struct bme280_dev dev;
-
     struct identifier id;
 
     if ((id.fd = open(I2C_BUS_ARGUMENT, O_RDWR)) < 0) {
@@ -62,24 +60,20 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    // ----------   initialize lcd -----------------
-
-    if (wiringPiSetup () == -1) {
+    // ---------- LCD
+    if (wiringPiSetup() == -1) {
         exit (1);
     }
-
     int fd = wiringPiI2CSetup(I2C_ADDR);
+    lcd_init(fd);
 
-    lcd_init(fd); // setup LCD
-
-    // ----------   modbus -----------------
-
+    // ---------- UART MODBUS
     int uart0_filestream = initialize_uart();
 
-    // ----------   loop -----------------
-
+    // ---------- LOOP
     loop(dev, fd, uart0_filestream);
 
+    // ---------- CLOSE RESOURCES TODO: CLOSE RESOURCES EM TODOS EXITS E SIGINT
     close(uart0_filestream);
 
     return 0;
