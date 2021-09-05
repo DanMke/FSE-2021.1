@@ -131,6 +131,9 @@ int on_off_control(float referenceTemperature, float internalTemperature, int co
 }
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
+    int op;
+    printf("Selecione entre PID e On/Off\n");
+    scanf("%d", &op);
     struct bme280_data comp_data;
     turn_off_fan();
     turn_off_resistor();
@@ -152,6 +155,10 @@ void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
 
         show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
 
-        controlSignal = on_off_control(referenceTemperature, internalTemperature, controlSignal);
+        if (op == 1) {
+            controlSignal = on_off_control(referenceTemperature, internalTemperature, controlSignal);
+        } else {
+            controlSignal = pid(referenceTemperature, internalTemperature, controlSignal);
+        }
     }
 }
