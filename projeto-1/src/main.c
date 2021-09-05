@@ -19,9 +19,19 @@
 #include "crc16.h"
 #include "uart_modbus.h"
 
+#include <errno.h>
+
+#include <softPwm.h>
+
+void turn_on_resistor(int intensity);
+void turn_on_fan(int intensity);
+void turn_off_resistor();
+void turn_off_fan();
+
 void loop(struct bme280_dev dev, int fd, int uart0_filestream);
 
 int main(int argc, char* argv[]) {
+
     // ---------- BME280
     const char I2C_BUS_ARGUMENT[] = "/dev/i2c-1";
     struct bme280_dev dev;
@@ -70,6 +80,21 @@ int main(int argc, char* argv[]) {
     // ---------- UART MODBUS
     int uart0_filestream = initialize_uart();
 
+    // ---------- PWM
+
+    // WiringPi Setup no LCD
+    turn_on_resistor(50);
+
+    sleep(5);
+
+    turn_off_resistor();
+
+    turn_on_fan(50);
+
+    sleep(5);
+
+    turn_off_fan();
+
     // ---------- LOOP
     loop(dev, fd, uart0_filestream);
 
@@ -77,6 +102,44 @@ int main(int argc, char* argv[]) {
     close(uart0_filestream);
 
     return 0;
+}
+
+void turn_on_resistor(int intensity) {
+    const int PIN_RESISTOR_GPIO = 4;
+
+    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
+    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
+    softPwmWrite(PIN_RESISTOR_GPIO, intensity);
+}
+
+void turn_on_fan(int intensity) {
+    const int PIN_FAN_GPIO = 5;
+
+    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
+    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
+    softPwmWrite(PIN_RESISTOR_GPIO, intensity);
+}
+
+void turn_off_resistor() {
+    const int PIN_RESISTOR_GPIO = 4;
+
+    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
+    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
+    softPwmWrite(PIN_RESISTOR_GPIO, 0);
+}
+
+void turn_off_fan() {
+    const int PIN_FAN_GPIO = 5;
+
+    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
+    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
+    softPwmWrite(PIN_RESISTOR_GPIO, 0);
+}
+
+void on_off_control() {
+    const int HYSTERESIS = 4;
+
+
 }
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
@@ -101,6 +164,6 @@ void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
 
         show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
 
-        sleep(2);
+        sleep(1);
     }
 }
