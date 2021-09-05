@@ -14,23 +14,30 @@
 #include <fcntl.h>
 #include <termios.h>
 
+#include <errno.h>
+
+#include <signal.h>
+
 #include "bme280.h"
 #include "i2clcd.h"
 #include "crc16.h"
 #include "uart_modbus.h"
+#include "gpio.h"
 
-#include <errno.h>
-
-#include <softPwm.h>
-
-void turn_on_resistor(int intensity);
-void turn_on_fan(int intensity);
-void turn_off_resistor();
-void turn_off_fan();
+void finishResources();
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream);
 
+int uart0_filestream;
+
 int main(int argc, char* argv[]) {
+
+    // ---------- LCD
+    if (wiringPiSetup() == -1) {
+        exit(1);
+    }
+    int fd = wiringPiI2CSetup(I2C_ADDR);
+    lcd_init(fd);
 
     // ---------- BME280
     const char I2C_BUS_ARGUMENT[] = "/dev/i2c-1";
@@ -70,15 +77,10 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    // ---------- LCD
-    if (wiringPiSetup() == -1) {
-        exit (1);
-    }
-    int fd = wiringPiI2CSetup(I2C_ADDR);
-    lcd_init(fd);
-
     // ---------- UART MODBUS
-    int uart0_filestream = initialize_uart();
+    uart0_filestream = initialize_uart();
+
+    signal(SIGINT, finishResources);
 
     // ---------- LOOP
     loop(dev, fd, uart0_filestream);
@@ -89,37 +91,13 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-void turn_on_resistor(int intensity) {
-    const int PIN_RESISTOR_GPIO = 4;
-
-    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
-    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
-    softPwmWrite(PIN_RESISTOR_GPIO, intensity);
+void finishResources() {
+    turn_off_resistor();
+    turn_off_fan();
+    close(uart0_filestream);
 }
 
-void turn_on_fan(int intensity) {
-    const int PIN_FAN_GPIO = 5;
 
-    pinMode(PIN_FAN_GPIO, OUTPUT);
-    softPwmCreate(PIN_FAN_GPIO, 0, 100);
-    softPwmWrite(PIN_FAN_GPIO, intensity);
-}
-
-void turn_off_resistor() {
-    const int PIN_RESISTOR_GPIO = 4;
-
-    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
-    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
-    softPwmWrite(PIN_RESISTOR_GPIO, 0);
-}
-
-void turn_off_fan() {
-    const int PIN_FAN_GPIO = 5;
-
-    pinMode(PIN_FAN_GPIO, OUTPUT);
-    softPwmCreate(PIN_FAN_GPIO, 0, 100);
-    softPwmWrite(PIN_FAN_GPIO, 0);
-}
 
 int on_off_control(float referenceTemperature, float internalTemperature, int controlSingal) {
     const int HYSTERESIS = 4;
@@ -170,10 +148,7 @@ void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
         float internalTemperature = request_internal_temperature(uart0_filestream);
         int keyState = request_key_state(uart0_filestream);
 
-        printf("TE %0.2lf\n", externalTemperature);
-        printf("TR %0.2lf\n", referenceTemperature);
-        printf("TI %0.2lf\n", internalTemperature);
-        printf("KEY STATE %d\n", keyState);
+        printf("TE %0.2lf\nTR %0.2lf\nTI %0.2lf\nKEY STATE %d\n", externalTemperature, referenceTemperature, internalTemperature, keyState);
 
         show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
 
