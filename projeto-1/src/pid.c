@@ -12,17 +12,18 @@ double erro_total, erro_anterior = 0.0;
 int sinal_de_controle_MAX = 100.0;
 int sinal_de_controle_MIN = -100.0;
 
-void pid_configura_constantes(double Kp_, double Ki_, double Kd_){
+void pid_configura_constantes(double Kp_, double Ki_, double Kd_) {
     Kp = Kp_;
     Ki = Ki_;
     Kd = Kd_;
 }
 
-void pid_atualiza_referencia(float referencia_){
+void pid_atualiza_referencia(float referencia_) {
     referencia = (double) referencia_;
 }
 
 double pid_controle(double saida_medida){
+    printf("PID:\nRef: %0.2lf\nTi: %0.2lf\nKp: %0.2lf\nKi: %0.2lf\nKd: %0.2lf\n", referencia, saida_medida, Kp, Ki, Kd);
 
     double erro = referencia - saida_medida;
 

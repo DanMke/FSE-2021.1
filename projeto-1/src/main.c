@@ -23,6 +23,7 @@
 #include "crc16.h"
 #include "uart_modbus.h"
 #include "gpio.h"
+#include "pid.h"
 
 void finishResources();
 
@@ -97,9 +98,30 @@ void finishResources() {
     close(uart0_filestream);
 }
 
+int pid(float referenceTemperature, float internalTemperature, int controlSignal) {
+    pid_configura_constantes(5.0, 1.0, 5.0);
+    pid_atualiza_referencia(referenceTemperature);
+    double newControlSignal = pid_controle(internalTemperature);
+    printf("newControlSignal: %lf\n", newControlSignal);
+    if (newControlSignal > 0.0) {
+        if (controlSignal < 0) {
+            turn_off_fan();
+        }
+        turn_on_resistor((int)newControlSignal);
+    } else if (newControlSignal < 0.0) {
+        if (controlSignal > 0) {
+            turn_off_resistor();
+        }
+//        if ((int)newControlSignal != controlSignal) {
+//            turn_on_fan((int)newControlSignal*(-1));
+//        }
+        turn_on_fan((int)newControlSignal*(-1));
+    }
 
+    return (int)newControlSignal;
+}
 
-int on_off_control(float referenceTemperature, float internalTemperature, int controlSingal) {
+int on_off_control(float referenceTemperature, float internalTemperature, int controlSignal) {
     const int HYSTERESIS = 4;
     float inferiorLimit = referenceTemperature - (HYSTERESIS/2);
     float upperLimit = referenceTemperature + (HYSTERESIS/2);
@@ -107,21 +129,21 @@ int on_off_control(float referenceTemperature, float internalTemperature, int co
     int newControlSignal;
 
     if (internalTemperature < inferiorLimit) {
-        if (controlSingal < 0) {
+        if (controlSignal < 0) {
             turn_off_fan();
         }
         turn_on_resistor(100);
         newControlSignal = 100;
     } else if (internalTemperature > upperLimit) {
-        if (controlSingal > 0) {
+        if (controlSignal > 0) {
             turn_off_resistor();
         }
         turn_on_fan(100);
         newControlSignal = -100;
     } else {
-        if (controlSingal > 0) {
+        if (controlSignal > 0) {
             turn_off_resistor();
-        } else if (controlSingal < 0) {
+        } else if (controlSignal < 0) {
             turn_off_fan();
         }
         newControlSignal = 0;
