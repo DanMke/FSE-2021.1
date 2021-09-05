@@ -20,7 +20,7 @@
 #include <stdio.h>
 
 void show_in_lcd(int fd, float externalTemperature, float referenceTemperature, float internalTemperature) {
-    ClrLcd(fd);
+//    ClrLcd(fd);
 
     lcdLoc(LINE1, fd);
     typeln("TE", fd);
@@ -33,7 +33,7 @@ void show_in_lcd(int fd, float externalTemperature, float referenceTemperature, 
     typeln("TI", fd);
     typeFloat(internalTemperature, fd);
 
-    delay(2000);
+//    delay(2000);
 }
 
 // float to string

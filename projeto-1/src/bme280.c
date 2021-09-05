@@ -1721,9 +1721,9 @@ int8_t get_data_from_bme280(struct bme280_dev *dev, struct bme280_data *comp_dat
         return rslt;
     }
 
-    printf("Temperature, Pressure, Humidity\n");
-
-    print_sensor_data(comp_data);
+//    printf("Temperature, Pressure, Humidity\n");
+//
+//    print_sensor_data(comp_data);
 
     return rslt;
 }

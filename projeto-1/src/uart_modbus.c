@@ -47,16 +47,16 @@ void write_in_uart(int uart0_filestream, char device_code, char code, char subco
 
     memcpy(&tx_buffer[7], &crc, 2);
 
-    printf("Buffers de memória criados!\n");
+//    printf("Buffers de memória criados!\n");
 
     if (uart0_filestream != -1) {
-        printf("Escrevendo caracteres na UART ...");
+//        printf("Escrevendo caracteres na UART ...");
 
         int count = write(uart0_filestream, tx_buffer, 9);
         if (count < 0) {
             printf("UART TX error\n");
         } else {
-            printf("escrito.\n");
+//            printf("escrito.\n");
         }
     }
 }
@@ -91,7 +91,7 @@ void read_data_uart(int uart0_filestream, unsigned char *rx_buffer) {
 float request_internal_temperature(int uart0_filestream) {
     write_in_uart(uart0_filestream, 0x01, 0x23, 0xC1);
 
-    sleep(2);
+    sleep(1);
 
     unsigned char *rx_buffer;
     rx_buffer = (unsigned char*) malloc(9 * sizeof(unsigned char));
@@ -108,7 +108,7 @@ float request_internal_temperature(int uart0_filestream) {
 float request_potentiometer_temperature(int uart0_filestream) {
     write_in_uart(uart0_filestream, 0x01, 0x23, 0xC2);
 
-    sleep(2);
+    sleep(1);
 
     unsigned char *rx_buffer;
     rx_buffer = (unsigned char*) malloc(9 * sizeof(unsigned char));
@@ -125,7 +125,7 @@ float request_potentiometer_temperature(int uart0_filestream) {
 int request_key_state(int uart0_filestream) {
     write_in_uart(uart0_filestream, 0x01, 0x23, 0xC3);
 
-    sleep(2);
+    sleep(1);
 
     unsigned char *rx_buffer;
     rx_buffer = (unsigned char*) malloc(9 * sizeof(unsigned char));

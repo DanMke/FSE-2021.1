@@ -80,21 +80,6 @@ int main(int argc, char* argv[]) {
     // ---------- UART MODBUS
     int uart0_filestream = initialize_uart();
 
-    // ---------- PWM
-
-    // WiringPi Setup no LCD
-    turn_on_resistor(50);
-
-    sleep(5);
-
-    turn_off_resistor();
-
-    turn_on_fan(50);
-
-    sleep(5);
-
-    turn_off_fan();
-
     // ---------- LOOP
     loop(dev, fd, uart0_filestream);
 
@@ -115,9 +100,9 @@ void turn_on_resistor(int intensity) {
 void turn_on_fan(int intensity) {
     const int PIN_FAN_GPIO = 5;
 
-    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
-    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
-    softPwmWrite(PIN_RESISTOR_GPIO, intensity);
+    pinMode(PIN_FAN_GPIO, OUTPUT);
+    softPwmCreate(PIN_FAN_GPIO, 0, 100);
+    softPwmWrite(PIN_FAN_GPIO, intensity);
 }
 
 void turn_off_resistor() {
@@ -131,19 +116,47 @@ void turn_off_resistor() {
 void turn_off_fan() {
     const int PIN_FAN_GPIO = 5;
 
-    pinMode(PIN_RESISTOR_GPIO, OUTPUT);
-    softPwmCreate(PIN_RESISTOR_GPIO, 0, 100);
-    softPwmWrite(PIN_RESISTOR_GPIO, 0);
+    pinMode(PIN_FAN_GPIO, OUTPUT);
+    softPwmCreate(PIN_FAN_GPIO, 0, 100);
+    softPwmWrite(PIN_FAN_GPIO, 0);
 }
 
-void on_off_control() {
+int on_off_control(float referenceTemperature, float internalTemperature, int controlSingal) {
     const int HYSTERESIS = 4;
+    float inferiorLimit = referenceTemperature - (HYSTERESIS/2);
+    float upperLimit = referenceTemperature + (HYSTERESIS/2);
 
+    int newControlSignal;
 
+    if (internalTemperature < inferiorLimit) {
+        if (controlSingal < 0) {
+            turn_off_fan();
+        }
+        turn_on_resistor(100);
+        newControlSignal = 100;
+    } else if (internalTemperature > upperLimit) {
+        if (controlSingal > 0) {
+            turn_off_resistor();
+        }
+        turn_on_fan(100);
+        newControlSignal = -100;
+    } else {
+        if (controlSingal > 0) {
+            turn_off_resistor();
+        } else if (controlSingal < 0) {
+            turn_off_fan();
+        }
+        newControlSignal = 0;
+    }
+
+    return newControlSignal;
 }
 
 void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
     struct bme280_data comp_data;
+    turn_off_fan();
+    turn_off_resistor();
+    int controlSignal = 0;
 
     while (1) {
         int8_t rslt = get_data_from_bme280(&dev, &comp_data);
@@ -164,6 +177,6 @@ void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
 
         show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
 
-        sleep(1);
+        controlSignal = on_off_control(referenceTemperature, internalTemperature, controlSignal);
     }
 }
