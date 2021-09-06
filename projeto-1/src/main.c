@@ -18,6 +18,8 @@
 
 #include <signal.h>
 
+#include <pthread.h>
+
 #include "bme280.h"
 #include "i2clcd.h"
 #include "crc16.h"
@@ -27,9 +29,21 @@
 
 void finishResources();
 
-void loop(struct bme280_dev dev, int fd, int uart0_filestream);
+void *thread_bme280(void *arg);
+void *thread_uart(void *arg);
+void *thread_control(void *arg);
 
+pthread_t threads[3];
+int fd;
 int uart0_filestream;
+struct bme280_dev dev;
+struct bme280_data comp_data;
+float externalTemperature;
+float referenceTemperature;
+float internalTemperature;
+int keyState;
+int op = 1;
+int controlSignal = 0;
 
 int main(int argc, char* argv[]) {
 
@@ -37,12 +51,11 @@ int main(int argc, char* argv[]) {
     if (wiringPiSetup() == -1) {
         exit(1);
     }
-    int fd = wiringPiI2CSetup(I2C_ADDR);
+    fd = wiringPiI2CSetup(I2C_ADDR);
     lcd_init(fd);
 
     // ---------- BME280
     const char I2C_BUS_ARGUMENT[] = "/dev/i2c-1";
-    struct bme280_dev dev;
     struct identifier id;
 
     if ((id.fd = open(I2C_BUS_ARGUMENT, O_RDWR)) < 0) {
@@ -81,25 +94,35 @@ int main(int argc, char* argv[]) {
     // ---------- UART MODBUS
     uart0_filestream = initialize_uart();
 
+    create_pwm();
+
+    pid_configura_constantes(5.0, 3.0, 3.0);
+
     signal(SIGINT, finishResources);
 
-    // ---------- LOOP
-    loop(dev, fd, uart0_filestream);
+    pthread_create(&(threads[0]), NULL, thread_bme280, NULL);
+    pthread_create(&(threads[1]), NULL, thread_uart, NULL);
+    pthread_create(&(threads[2]), NULL, thread_control, NULL);
 
-    // ---------- CLOSE RESOURCES TODO: CLOSE RESOURCES EM TODOS EXITS E SIGINT
-    close(uart0_filestream);
+    while(1) {
+        printf("TE %0.2lf\nTR %0.2lf\nTI %0.2lf\nKEY STATE %d\n", externalTemperature, referenceTemperature, internalTemperature, keyState);
+        show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
+        sleep(1);
+    }
 
     return 0;
 }
 
-void finishResources() {
+void finishResources() { // TODO: CLOSE RESOURCES EM TODOS EXITS E SIGINT
     turn_off_resistor();
     turn_off_fan();
     close(uart0_filestream);
+    for(int i = 0; i < 3; i++) {
+        pthread_join(threads[i], NULL);
+    }
 }
 
 int pid(float referenceTemperature, float internalTemperature, int controlSignal) {
-    pid_configura_constantes(5.0, 1.0, 5.0);
     pid_atualiza_referencia(referenceTemperature);
     double newControlSignal = pid_controle(internalTemperature);
     printf("newControlSignal: %lf\n", newControlSignal);
@@ -116,7 +139,6 @@ int pid(float referenceTemperature, float internalTemperature, int controlSignal
             turn_on_fan((int)newControlSignal*(-1));
         } else {
             turn_off_fan();
-            printf("nao liguei a ventoinha\n");
         }
     }
 
@@ -154,36 +176,39 @@ int on_off_control(float referenceTemperature, float internalTemperature, int co
     return newControlSignal;
 }
 
-void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
-    int op;
-    printf("Selecione entre PID e On/Off\n");
-    scanf("%d", &op);
-    struct bme280_data comp_data;
-    turn_off_fan();
-    turn_off_resistor();
-    int controlSignal = 0;
-
+void *thread_bme280(void *arg) {
     while (1) {
         int8_t rslt = get_data_from_bme280(&dev, &comp_data);
         if (rslt != BME280_OK) {
             fprintf(stderr, "Failed to stream sensor data (code %+d).\n", rslt);
             exit(1);
         }
+        externalTemperature = comp_data.temperature;
+        sleep(1);
+    }
+}
 
-        float externalTemperature = comp_data.temperature;
-        float referenceTemperature = request_potentiometer_temperature(uart0_filestream);
-        float internalTemperature = request_internal_temperature(uart0_filestream);
-        int keyState = request_key_state(uart0_filestream);
+void *thread_uart(void *arg) {
+    while (1) {
+        referenceTemperature = request_potentiometer_temperature(uart0_filestream);
+        internalTemperature = request_internal_temperature(uart0_filestream);
+        keyState = request_key_state(uart0_filestream);
         sendControlSignal(uart0_filestream, controlSignal);
+    }
+}
 
-        printf("TE %0.2lf\nTR %0.2lf\nTI %0.2lf\nKEY STATE %d\n", externalTemperature, referenceTemperature, internalTemperature, keyState);
+void *thread_control(void *arg) {
+    printf("Selecione entre On/Off (1) e PID (2)\n");
+    scanf("%d", &op);
+    turn_off_fan();
+    turn_off_resistor();
 
-        show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
-
+    while (1) {
         if (op == 1) {
             controlSignal = on_off_control(referenceTemperature, internalTemperature, controlSignal);
         } else {
             controlSignal = pid(referenceTemperature, internalTemperature, controlSignal);
         }
+        sleep(1);
     }
 }

@@ -1,10 +1,10 @@
 CC = gcc
-LDFLAGS = -lwiringPi
+LDFLAGS = -lwiringPi -lpthread
 BLDDIR = .
 INCDIR = $(BLDDIR)/inc
 SRCDIR = $(BLDDIR)/src
 OBJDIR = $(BLDDIR)/obj
-CFLAGS = -c -Wall -lwiringPi -I$(INCDIR)
+CFLAGS = -c -Wall -lwiringPi -lpthread -I$(INCDIR)
 SRC = $(wildcard $(SRCDIR)/*.c)
 OBJ = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC))
 EXE = bin/bin
