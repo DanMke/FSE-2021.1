@@ -172,6 +172,7 @@ void loop(struct bme280_dev dev, int fd, int uart0_filestream) {
         float referenceTemperature = request_potentiometer_temperature(uart0_filestream);
         float internalTemperature = request_internal_temperature(uart0_filestream);
         int keyState = request_key_state(uart0_filestream);
+        sendControlSignal(uart0_filestream, controlSignal);
 
         printf("TE %0.2lf\nTR %0.2lf\nTI %0.2lf\nKEY STATE %d\n", externalTemperature, referenceTemperature, internalTemperature, keyState);
 

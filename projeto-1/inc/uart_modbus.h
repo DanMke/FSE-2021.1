@@ -13,4 +13,6 @@ float request_potentiometer_temperature(int uart0_filestream);
 
 int request_key_state(int uart0_filestream);
 
+void sendControlSignal(int uart0_filestream, int controlSignal);
+
 #endif // UART_MODBUS_H_

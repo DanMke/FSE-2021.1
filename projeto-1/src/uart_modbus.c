@@ -55,6 +55,7 @@ void write_in_uart(int uart0_filestream, char device_code, char code, char subco
         int count = write(uart0_filestream, tx_buffer, 9);
         if (count < 0) {
             printf("UART TX error\n");
+            exit(1);
         } else {
 //            printf("escrito.\n");
         }
@@ -137,4 +138,36 @@ int request_key_state(int uart0_filestream) {
     free(rx_buffer);
 
     return currentInteger;
+}
+
+void sendControlSignal(int uart0_filestream, int controlSignal) {
+    unsigned char tx_buffer[13];
+
+    tx_buffer[0] = 0x01;
+    tx_buffer[1] = 0x16;
+    tx_buffer[2] = 0xD1;
+
+    char university_registration[4] = {7, 0, 0, 3};
+
+    memcpy(&tx_buffer[3], &university_registration, 4);
+
+    memcpy(&tx_buffer[7], &controlSignal, 4);
+
+    short crc = calcula_CRC(tx_buffer, 11);
+
+    memcpy(&tx_buffer[11], &crc, 2);
+
+//    printf("Buffers de memória criados!\n");
+
+    if (uart0_filestream != -1) {
+//        printf("Escrevendo caracteres na UART ...");
+
+        int count = write(uart0_filestream, tx_buffer, 13);
+        if (count < 0) {
+            printf("UART TX error\n");
+            exit(1);
+        } else {
+//            printf("escrito.\n");
+        }
+    }
 }
