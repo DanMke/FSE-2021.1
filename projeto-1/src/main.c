@@ -112,10 +112,12 @@ int pid(float referenceTemperature, float internalTemperature, int controlSignal
         if (controlSignal > 0) {
             turn_off_resistor();
         }
-//        if ((int)newControlSignal != controlSignal) {
-//            turn_on_fan((int)newControlSignal*(-1));
-//        }
-        turn_on_fan((int)newControlSignal*(-1));
+        if ((int)newControlSignal < -40) {
+            turn_on_fan((int)newControlSignal*(-1));
+        } else {
+            turn_off_fan();
+            printf("nao liguei a ventoinha\n");
+        }
     }
 
     return (int)newControlSignal;
