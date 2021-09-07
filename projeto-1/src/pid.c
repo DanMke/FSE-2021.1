@@ -23,8 +23,6 @@ void pid_atualiza_referencia(float referencia_) {
 }
 
 double pid_controle(double saida_medida){
-    printf("PID:\nRef: %0.2lf\nTi: %0.2lf\nKp: %0.2lf\nKi: %0.2lf\nKd: %0.2lf\n", referencia, saida_medida, Kp, Ki, Kd);
-
     double erro = referencia - saida_medida;
 
     erro_total += erro; // Acumula o erro (Termo Integral)
