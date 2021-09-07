@@ -20,6 +20,8 @@
 
 #include <pthread.h>
 
+#include <time.h>
+
 #include "bme280.h"
 #include "i2clcd.h"
 #include "crc16.h"
@@ -32,8 +34,14 @@ void finishResources();
 void *thread_bme280(void *arg);
 void *thread_uart(void *arg);
 void *thread_control(void *arg);
+void *thread_csv(void *arg);
 
-pthread_t threads[3];
+void create_csv();
+void add_data_in_csv();
+
+void menu();
+
+pthread_t threads[4];
 int fd;
 int uart0_filestream;
 struct bme280_dev dev;
@@ -42,8 +50,24 @@ float externalTemperature;
 float referenceTemperature;
 float internalTemperature;
 int keyState;
-int op = 1;
+int option = 1;
 int controlSignal = 0;
+int hysteresis = 4;
+int controlMode;
+FILE* csv_file;
+double kp = 5.0;
+double ki = 1.0;
+double kd = 5.0;
+int trOption = 2;
+
+const int ONOFF_CONTROL = 0;
+const int PID_CONTROL = 1;
+const int AUTO_CONTROL = 2;
+
+const int OPTION_AUTO = 3;
+
+const int TR_MANUAL = 1;
+const int TR_POTENTIOMETER = 2;
 
 int main(int argc, char* argv[]) {
 
@@ -96,33 +120,109 @@ int main(int argc, char* argv[]) {
 
     create_pwm();
 
-    pid_configura_constantes(5.0, 3.0, 3.0);
-
     signal(SIGINT, finishResources);
+    signal(SIGSTOP, finishResources);
 
     pthread_create(&(threads[0]), NULL, thread_bme280, NULL);
     pthread_create(&(threads[1]), NULL, thread_uart, NULL);
+
+    menu();
+
+    create_csv();
+
     pthread_create(&(threads[2]), NULL, thread_control, NULL);
+    pthread_create(&(threads[3]), NULL, thread_csv, NULL);
 
     while(1) {
+        sleep(1);
         printf("TE %0.2lf\nTR %0.2lf\nTI %0.2lf\nKEY STATE %d\n", externalTemperature, referenceTemperature, internalTemperature, keyState);
         show_in_lcd(fd, externalTemperature, referenceTemperature, internalTemperature);
-        sleep(1);
     }
 
     return 0;
 }
 
-void finishResources() { // TODO: CLOSE RESOURCES EM TODOS EXITS E SIGINT
-    turn_off_resistor();
+void menu() {
+    system("clear");
     turn_off_fan();
-    close(uart0_filestream);
-    for(int i = 0; i < 3; i++) {
-        pthread_join(threads[i], NULL);
+    turn_off_resistor();
+    printf("Utilize CTRL+C ou CTRL+Z para finalizar a execução\n");
+    printf("Selecione uma opção:\n(1) On/Off\n(2) PID\n(3) Utilizar estado da chave externa como controle\n(4) Para finalizar\n");
+    scanf("%d", &option);
+    switch (option) {
+        case 1:
+            controlMode = ONOFF_CONTROL;
+            printf("Qual o valor desejado para a histerese?\n");
+            scanf("%d", &hysteresis);
+            break;
+
+        case 2:
+            controlMode = PID_CONTROL;
+            printf("Qual o valor desejado para Kp?\n");
+            scanf("%lf", &kp);
+            printf("Qual o valor desejado para Ki?\n");
+            scanf("%lf", &ki);
+            printf("Qual o valor desejado para Kd?\n");
+            scanf("%lf", &kd);
+            pid_configura_constantes(kp, ki, kd);
+            break;
+
+        case 3:
+            controlMode = AUTO_CONTROL;
+            pid_configura_constantes(kp, ki, kd);
+            break;
+
+        case 4:
+            finishResources();
+            break;
+
+        default:
+            system("clear");
+            printf("Opção errada, escolha novamente\n");
+            sleep(1);
+            menu();
+            break;
     }
+    printf("Configuração da temperatura de referencia:\n(1) Escolher temperatura de referencia\n(2) Atraves do potenciometro\n");
+    scanf("%d", &trOption);
+    while (trOption != TR_MANUAL && trOption != TR_POTENTIOMETER) {
+        printf("Configuração da temperatura de referencia:\n(1) Escolher temperatura de referencia\n(2) Atraves do potenciometro\n");
+        scanf("%d", &trOption);
+    }
+    if (trOption == TR_MANUAL) {
+        float newReferenceTemperature;
+        printf("Qual a temperatura desejada? Entre %0.2f e 100 Graus Celsius\n", externalTemperature);
+        scanf("%f", &newReferenceTemperature);
+        while (newReferenceTemperature < externalTemperature && newReferenceTemperature > 100.0) {
+            printf("Qual a temperatura desejada? Entre %0.2f e 100 Graus Celsius\n", externalTemperature);
+            scanf("%f", &newReferenceTemperature);
+        }
+        referenceTemperature = newReferenceTemperature;
+    }
+    system("clear");
 }
 
-int pid(float referenceTemperature, float internalTemperature, int controlSignal) {
+void finishResources() {
+    for (int i = 0; i < 4; i++) {
+        pthread_cancel(threads[i]);
+    }
+    for(int i = 0; i < 4; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    fclose(csv_file);
+
+    close(uart0_filestream);
+
+    turn_off_resistor();
+    turn_off_fan();
+
+    sleep(2);
+
+    exit(0);
+}
+
+void pid() {
     pid_atualiza_referencia(referenceTemperature);
     double newControlSignal = pid_controle(internalTemperature);
     printf("newControlSignal: %lf\n", newControlSignal);
@@ -142,38 +242,33 @@ int pid(float referenceTemperature, float internalTemperature, int controlSignal
         }
     }
 
-    return (int)newControlSignal;
+    controlSignal = (int)newControlSignal;
 }
 
-int on_off_control(float referenceTemperature, float internalTemperature, int controlSignal) {
-    const int HYSTERESIS = 4;
-    float inferiorLimit = referenceTemperature - (HYSTERESIS/2);
-    float upperLimit = referenceTemperature + (HYSTERESIS/2);
-
-    int newControlSignal;
+void on_off_control() {
+    float inferiorLimit = referenceTemperature - (hysteresis/2);
+    float upperLimit = referenceTemperature + (hysteresis/2);
 
     if (internalTemperature < inferiorLimit) {
         if (controlSignal < 0) {
             turn_off_fan();
         }
         turn_on_resistor(100);
-        newControlSignal = 100;
+        controlSignal = 100;
     } else if (internalTemperature > upperLimit) {
         if (controlSignal > 0) {
             turn_off_resistor();
         }
         turn_on_fan(100);
-        newControlSignal = -100;
+        controlSignal = -100;
     } else {
         if (controlSignal > 0) {
             turn_off_resistor();
         } else if (controlSignal < 0) {
             turn_off_fan();
         }
-        newControlSignal = 0;
+        controlSignal = 0;
     }
-
-    return newControlSignal;
 }
 
 void *thread_bme280(void *arg) {
@@ -181,6 +276,7 @@ void *thread_bme280(void *arg) {
         int8_t rslt = get_data_from_bme280(&dev, &comp_data);
         if (rslt != BME280_OK) {
             fprintf(stderr, "Failed to stream sensor data (code %+d).\n", rslt);
+            finishResources();
             exit(1);
         }
         externalTemperature = comp_data.temperature;
@@ -190,25 +286,55 @@ void *thread_bme280(void *arg) {
 
 void *thread_uart(void *arg) {
     while (1) {
-        referenceTemperature = request_potentiometer_temperature(uart0_filestream);
+        if (trOption == TR_POTENTIOMETER) {
+            referenceTemperature = request_potentiometer_temperature(uart0_filestream);
+        }
         internalTemperature = request_internal_temperature(uart0_filestream);
-        keyState = request_key_state(uart0_filestream);
+        if (option == OPTION_AUTO) {
+            keyState = request_key_state(uart0_filestream);
+            controlMode = keyState;
+        }
         sendControlSignal(uart0_filestream, controlSignal);
     }
 }
 
 void *thread_control(void *arg) {
-    printf("Selecione entre On/Off (1) e PID (2)\n");
-    scanf("%d", &op);
-    turn_off_fan();
-    turn_off_resistor();
-
     while (1) {
-        if (op == 1) {
-            controlSignal = on_off_control(referenceTemperature, internalTemperature, controlSignal);
-        } else {
-            controlSignal = pid(referenceTemperature, internalTemperature, controlSignal);
+        if (controlMode == ONOFF_CONTROL) {
+            on_off_control();
+        } else if (controlMode == PID_CONTROL){
+            pid();
         }
         sleep(1);
     }
+}
+
+void *thread_csv(void *arg) {
+    while (1) {
+        sleep(2);
+        add_data_in_csv();
+    }
+}
+
+void create_csv() {
+    csv_file = fopen("project1.csv", "w");
+    fprintf(csv_file, "Data/Hora, Temperatura Externa, Temperatura Interna, Temperatura Referencia, Sinal de Controle\n");
+    fclose(csv_file);
+}
+
+void add_data_in_csv() {
+    time_t rawtime;
+    struct tm *timeinfo;
+    char buffer[80];
+
+    csv_file = fopen("project1.csv", "a+");
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    strftime(buffer,80,"%F %X", timeinfo);
+
+    fprintf(csv_file, "%s, %.3f, %.3f, %.3f, %d%%\n", buffer, externalTemperature, internalTemperature, referenceTemperature, controlSignal);
+
+    fclose(csv_file);
 }
