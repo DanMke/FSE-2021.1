@@ -16,18 +16,18 @@ typedef struct {
     Item *inputs;
 } Floor;
 
-int main () {
+int outputsSize;
+int inputsSize;
 
-    Floor floor;
-
+char* readFile(char *filename) {
     FILE *fp;
     char *buffer;
     long numbytes;
 
-    fp = fopen("configuracao_andar_terreo.json", "r");
+    fp = fopen(filename, "r");
 
     if(fp == NULL) {
-        return 1;
+        exit(1);
     }
 
     fseek(fp, 0L, SEEK_END);
@@ -38,11 +38,17 @@ int main () {
     buffer = (char*)calloc(numbytes, sizeof(char));
 
     if(buffer == NULL) {
-        return 1;
+        exit(1);
     }
 
     fread(buffer, sizeof(char), numbytes, fp);
     fclose(fp);
+
+    return buffer;
+}
+
+Floor getJsonData(char *buffer) {
+    Floor floor;
 
     cJSON *fileData = cJSON_Parse(buffer);
 
@@ -58,7 +64,7 @@ int main () {
     const cJSON *output = NULL;
 
     int counter = 0;
-    int outputsSize = cJSON_GetArraySize(outputs);
+    outputsSize = cJSON_GetArraySize(outputs);
     floor.outputs = malloc(outputsSize * sizeof(Item));
 
     cJSON_ArrayForEach(output, outputs) {
@@ -81,7 +87,7 @@ int main () {
     const cJSON *input = NULL;
 
     counter = 0;
-    int inputsSize = cJSON_GetArraySize(inputs);
+    inputsSize = cJSON_GetArraySize(inputs);
     floor.inputs = malloc(inputsSize * sizeof(Item));
 
     cJSON_ArrayForEach(input, inputs) {
@@ -100,9 +106,18 @@ int main () {
         counter++;
     }
 
-    free(buffer);
-
     cJSON_Delete(fileData);
+
+    return floor;
+}
+
+int main () {
+
+    char *buffer = readFile("configuracao_andar_terreo.json");
+
+    Floor floor = getJsonData(buffer);
+
+    free(buffer);
 
     printf("IP: %s\n", floor.ip);
     printf("PORT: %d\n", floor.port);
