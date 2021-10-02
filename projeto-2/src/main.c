@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cJSON.h>
+#include <wiringPi.h>
 
 typedef struct {
     char *type;
@@ -12,6 +13,7 @@ typedef struct {
 typedef struct {
     char *ip;
     int port;
+    char *name;
     Item *outputs;
     Item *inputs;
 } Floor;
@@ -53,9 +55,20 @@ Floor getJsonData(char *buffer) {
     cJSON *fileData = cJSON_Parse(buffer);
 
     cJSON *ip = cJSON_GetObjectItemCaseSensitive(fileData, "ip");
+    int ipStringLength = strlen(ip->valuestring);
+    printf("teste: %d\n", ipStringLength);
 
-    floor.ip = malloc(strlen(ip->valuestring) * sizeof(char));
+    floor.ip = malloc((ipStringLength + 1) * sizeof(char));
     strcpy(floor.ip, ip->valuestring);
+    printf("teste: %s\n", floor.ip);
+
+    cJSON *name = cJSON_GetObjectItemCaseSensitive(fileData, "nome");
+    int nameStringLength = strlen(name->valuestring);
+    printf("teste: %d\n", nameStringLength);
+
+    floor.name = malloc((nameStringLength + 1) * sizeof(char));
+    strcpy(floor.name, name->valuestring);
+    printf("teste: %s\n", floor.name);
 
     cJSON *port = cJSON_GetObjectItemCaseSensitive(fileData, "porta");
     floor.port = port->valueint;
@@ -65,17 +78,19 @@ Floor getJsonData(char *buffer) {
 
     int counter = 0;
     outputsSize = cJSON_GetArraySize(outputs);
-    floor.outputs = malloc(outputsSize * sizeof(Item));
+    floor.outputs = malloc((outputsSize + 1) * sizeof(Item));
 
     cJSON_ArrayForEach(output, outputs) {
         cJSON *type = cJSON_GetObjectItemCaseSensitive(output, "type");
         cJSON *tag = cJSON_GetObjectItemCaseSensitive(output, "tag");
         cJSON *gpio = cJSON_GetObjectItemCaseSensitive(output, "gpio");
 
-        floor.outputs[counter].type = malloc(strlen(type->valuestring) * sizeof(char));
+        int typeStringLength = strlen(type->valuestring);
+        floor.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
         strcpy(floor.outputs[counter].type, type->valuestring);
 
-        floor.outputs[counter].tag = malloc(strlen(tag->valuestring) * sizeof(char));
+        int tagStringLength = strlen(tag->valuestring);
+        floor.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
         strcpy(floor.outputs[counter].tag, tag->valuestring);
 
         floor.outputs[counter].gpioPin = gpio->valueint;
@@ -88,17 +103,19 @@ Floor getJsonData(char *buffer) {
 
     counter = 0;
     inputsSize = cJSON_GetArraySize(inputs);
-    floor.inputs = malloc(inputsSize * sizeof(Item));
+    floor.inputs = malloc((inputsSize + 1) * sizeof(Item));
 
     cJSON_ArrayForEach(input, inputs) {
         cJSON *type = cJSON_GetObjectItemCaseSensitive(input, "type");
         cJSON *tag = cJSON_GetObjectItemCaseSensitive(input, "tag");
         cJSON *gpio = cJSON_GetObjectItemCaseSensitive(input, "gpio");
 
-        floor.inputs[counter].type = malloc(strlen(type->valuestring) * sizeof(char));
+        int typeStringLength = strlen(type->valuestring);
+        floor.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
         strcpy(floor.inputs[counter].type, type->valuestring);
 
-        floor.inputs[counter].tag = malloc(strlen(tag->valuestring) * sizeof(char));
+        int tagStringLength = strlen(tag->valuestring);
+        floor.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
         strcpy(floor.inputs[counter].tag, tag->valuestring);
 
         floor.inputs[counter].gpioPin = gpio->valueint;
@@ -111,7 +128,15 @@ Floor getJsonData(char *buffer) {
     return floor;
 }
 
-int main () {
+int initWiringPi() {
+    if (wiringPiSetup() == -1) {
+        fprintf(stderr, "Failed to initialize wiringPi\n");
+        return 1;
+    }
+    return 0;
+}
+
+int main (int argc, char *argv[]) {
 
     char *buffer = readFile("configuracao_andar_terreo.json");
 
@@ -119,14 +144,24 @@ int main () {
 
     free(buffer);
 
+    if (initWiringPi() == 1) {
+        return 1;
+    }
+
     printf("IP: %s\n", floor.ip);
     printf("PORT: %d\n", floor.port);
+    printf("NAME: %s\n", floor.name);
 
     printf("OUTPUTS:\n");
     for (int i = 0; i < outputsSize; i++) {
         printf("type: %s\n", floor.outputs[i].type);
         printf("tag: %s\n", floor.outputs[i].tag);
         printf("gpio: %d\n", floor.outputs[i].gpioPin);
+
+        pinMode(floor.outputs[i].gpioPin, OUTPUT);
+        printf("State: %d\n", digitalRead(floor.outputs[i].gpioPin));
+        digitalWrite(floor.outputs[i].gpioPin, HIGH);
+        printf("State: %d\n", digitalRead(floor.outputs[i].gpioPin));
     }
 
     printf("INPUTS:\n");
@@ -134,6 +169,11 @@ int main () {
         printf("type: %s\n", floor.inputs[i].type);
         printf("tag: %s\n", floor.inputs[i].tag);
         printf("gpio: %d\n", floor.inputs[i].gpioPin);
+
+        pinMode(floor.inputs[i].gpioPin, INPUT);
+        printf("State: %d\n", digitalRead(floor.inputs[i].gpioPin));
+        digitalWrite(floor.inputs[i].gpioPin, HIGH);
+        printf("State: %d\n", digitalRead(floor.inputs[i].gpioPin));
     }
 
     for (int i = 0; i < outputsSize; i++) {
@@ -148,6 +188,8 @@ int main () {
 
     free(floor.outputs);
     free(floor.inputs);
+    free(floor.ip);
+    free(floor.name);
 
     return 0;
 }
