@@ -1,8 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <cJSON.h>
+#include <unistd.h>
+
 #include <wiringPi.h>
+
+#include <cJSON.h>
+#include <../inc/dht22.h>
 
 typedef struct {
     char *type;
@@ -190,6 +194,21 @@ int main (int argc, char *argv[]) {
     free(floor.inputs);
     free(floor.ip);
     free(floor.name);
+
+    DHT22 dht22 = { .celsiusTemperature = -1, .humidity = -1 };
+
+    uint8_t dht_pin = 28;  // 28 Terreo e 29 1o Andar
+
+    while (1) {
+        int no_success = read_dht_data(&dht22, dht_pin);
+
+        if (no_success) {
+            return 1;
+        }
+        sleep(1);
+        printf("Humidity = %.1f %% Temperature = %.1f *C\n", dht22.humidity, dht22.celsiusTemperature);
+
+    }
 
     return 0;
 }
