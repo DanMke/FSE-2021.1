@@ -5,8 +5,13 @@
 
 #include <wiringPi.h>
 
+#include <signal.h>
+#include <pthread.h>
+
 #include <cJSON.h>
 #include <../inc/dht22.h>
+
+#define NUM_THREADS 3
 
 typedef struct {
     char *type;
@@ -24,6 +29,47 @@ typedef struct {
 
 int outputsSize;
 int inputsSize;
+
+DHT22 dht22 = { .celsiusTemperature = -1, .humidity = -1 };
+uint8_t dht_pin = 28;  // 28 Terreo e 29 1o Andar
+
+pthread_t threads[NUM_THREADS];
+
+void finishResources() {
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_cancel(threads[i]);
+    }
+    for(int i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+//    sleep(2);
+
+    exit(0);
+}
+
+void *thread_server(void *arg) {
+    while (1) {
+        sleep(1);
+    }
+}
+
+void *thread_client(void *arg) {
+    while (1) {
+        sleep(1);
+    }
+}
+
+void *thread_dht22(void *arg) {
+    while (1) {
+        read_dht_data(&dht22, dht_pin);
+//        int no_success = read_dht_data(&dht22, dht_pin);
+//        if (no_success) {
+//            finishResources();
+//        }
+        sleep(1);
+    }
+}
 
 char* readFile(char *filename) {
     FILE *fp;
@@ -195,19 +241,16 @@ int main (int argc, char *argv[]) {
     free(floor.ip);
     free(floor.name);
 
-    DHT22 dht22 = { .celsiusTemperature = -1, .humidity = -1 };
+    signal(SIGINT, finishResources);
+    signal(SIGSTOP, finishResources);
 
-    uint8_t dht_pin = 28;  // 28 Terreo e 29 1o Andar
+    pthread_create(&(threads[0]), NULL, thread_dht22, NULL);
+    pthread_create(&(threads[1]), NULL, thread_client, NULL);
+    pthread_create(&(threads[2]), NULL, thread_server, NULL);
 
     while (1) {
-        int no_success = read_dht_data(&dht22, dht_pin);
-
-        if (no_success) {
-            return 1;
-        }
-        sleep(1);
         printf("Humidity = %.1f %% Temperature = %.1f *C\n", dht22.humidity, dht22.celsiusTemperature);
-
+        sleep(1);
     }
 
     return 0;
