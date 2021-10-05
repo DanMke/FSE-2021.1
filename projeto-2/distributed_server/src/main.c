@@ -8,8 +8,11 @@
 #include <signal.h>
 #include <pthread.h>
 
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
 #include <cJSON.h>
-#include <../inc/dht22.h>
+#include "../inc/dht22.h"
 
 #define NUM_THREADS 3
 
@@ -43,7 +46,9 @@ void finishResources() {
         pthread_join(threads[i], NULL);
     }
 
-//    sleep(2);
+    sleep(1);
+
+    printf("Finished\n");
 
     exit(0);
 }
