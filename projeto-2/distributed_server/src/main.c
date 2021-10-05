@@ -16,6 +16,12 @@
 
 #define NUM_THREADS 3
 
+#define IP_CENTRAL_SERVER "192.168.0.53"
+#define IP_DISTRIBUTED_SERVER "192.168.0.52"
+#define PORT_CENTRAL_SERVER 10006
+#define PORT_DISTRIBUTED_SERVER_T 10106
+#define PORT_DISTRIBUTED_SERVER_1 10206
+
 typedef struct {
     char *type;
     char *tag;
