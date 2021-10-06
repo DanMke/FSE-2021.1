@@ -18,9 +18,10 @@
 
 #define IP_CENTRAL_SERVER "192.168.0.53"
 #define IP_DISTRIBUTED_SERVER "192.168.0.22"
-#define PORT_CENTRAL_SERVER 10006
+#define PORT_CENTRAL_SERVER 10006;
 #define PORT_DISTRIBUTED_SERVER_T 10106
 #define PORT_DISTRIBUTED_SERVER_1 10206
+int PORT_DISTRIBUTED_SERVER;
 
 int servidorSocket;
 
@@ -43,11 +44,13 @@ int outputsSize;
 int inputsSize;
 
 DHT22 dht22 = { .celsiusTemperature = -1, .humidity = -1 };
-uint8_t dht_pin = 28;  // 28 Terreo e 29 1o Andar
+uint8_t dht_pin;  // 28 Terreo e 29 1o Andar
 
 pthread_t threads[NUM_THREADS];
 
 Floor floorGlobal;
+
+int pavement;
 
 void finishResources() {
 
@@ -86,6 +89,7 @@ cJSON *createJsonDataStatus() {
     cJSON *dataStatus = cJSON_CreateObject();
 
     cJSON_AddItemToObject(dataStatus, "request_type", cJSON_CreateString("DATA_STATUS"));
+    cJSON_AddItemToObject(dataStatus, "pavement", cJSON_CreateNumber(pavement));
     cJSON_AddItemToObject(dataStatus, "temperature", cJSON_CreateNumber(dht22.celsiusTemperature));
     cJSON_AddItemToObject(dataStatus, "humidity", cJSON_CreateNumber(dht22.humidity));
 
@@ -147,7 +151,7 @@ void *thread_server(void *arg) {
     unsigned short servidorPorta;
     unsigned int clienteLength;
 
-    servidorPorta = PORT_DISTRIBUTED_SERVER_T;
+    servidorPorta = PORT_DISTRIBUTED_SERVER;
 
     // Abrir Socket
     if((servidorSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -361,7 +365,22 @@ int initWiringPi() {
 
 int main (int argc, char *argv[]) {
 
-    char *buffer = readFile("configuracao_andar_terreo.json");
+    pavement = atoi(argv[1]);
+    char *filename;
+
+    if (pavement == 0) {
+        filename = "configuracao_andar_terreo.json";
+        PORT_DISTRIBUTED_SERVER = PORT_DISTRIBUTED_SERVER_T;
+        dht_pin = 28;
+    } else {
+        filename = "configuracao_andar_1.json";
+        PORT_DISTRIBUTED_SERVER = PORT_DISTRIBUTED_SERVER_1;
+        dht_pin = 29;
+    }
+
+    printf("Floor: %d\nPort: %d\ndht_pin: %d\nFile: %s\n", pavement, PORT_DISTRIBUTED_SERVER, dht_pin, filename);
+
+    char *buffer = readFile(filename);
 
     floorGlobal = getJsonData(buffer);
 
@@ -404,7 +423,6 @@ int main (int argc, char *argv[]) {
 
     pthread_create(&(threads[0]), NULL, thread_dht22, NULL);
     pthread_create(&(threads[1]), NULL, thread_server, NULL);
-    sleep(5);
     pthread_create(&(threads[2]), NULL, thread_client, NULL);
 
     while (1) {

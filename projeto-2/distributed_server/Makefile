@@ -21,5 +21,8 @@ $(OBJDIR)/%.o : $(SRCDIR)/%.c
 clean:
 	-rm -f $(OBJDIR)/*.o $(EXE)
 
-run:
-	${EXE}
+run-t:
+	${EXE} 0
+
+run-1:
+	${EXE} 1

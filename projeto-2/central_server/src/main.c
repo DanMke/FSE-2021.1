@@ -9,6 +9,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include <ncurses.h>
+
 #include <cJSON.h>
 
 #define NUM_THREADS 2
@@ -31,17 +33,23 @@ typedef struct {
 } Item;
 
 typedef struct {
+    int online;
     char *request_type;
+    int pavement;
     float temperature;
     float humidity;
     Item *outputs;
     Item *inputs;
 } DataStatus;
 
-DataStatus dataStatusGlobal;
+DataStatus dataStatusGlobal_T = { .online = 0 };
+DataStatus dataStatusGlobal_1 = { .online = 0 };
 
-int outputsSize;
-int inputsSize;
+int outputsSize_T;
+int inputsSize_T;
+
+int outputsSize_1;
+int inputsSize_1;
 
 void finishResources() {
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -60,25 +68,28 @@ void finishResources() {
     exit(0);
 }
 
-void parseData(char *buffer) {
+void parseDataT(char *buffer) {
     cJSON *receiveData = cJSON_Parse(buffer);
 
     cJSON *request_type = cJSON_GetObjectItemCaseSensitive(receiveData, "request_type");
     int requestTypeStringLength = strlen(request_type->valuestring);
-    dataStatusGlobal.request_type = malloc((requestTypeStringLength + 1) * sizeof(char));
-    strcpy(dataStatusGlobal.request_type, request_type->valuestring);
+    dataStatusGlobal_T.request_type = malloc((requestTypeStringLength + 1) * sizeof(char));
+    strcpy(dataStatusGlobal_T.request_type, request_type->valuestring);
+
+    cJSON *pavement = cJSON_GetObjectItemCaseSensitive(receiveData, "pavement");
+    dataStatusGlobal_T.pavement = pavement->valueint;
 
     cJSON *temperature = cJSON_GetObjectItemCaseSensitive(receiveData, "temperature");
     cJSON *humidity = cJSON_GetObjectItemCaseSensitive(receiveData, "humidity");
-    dataStatusGlobal.temperature = temperature->valuedouble;
-    dataStatusGlobal.humidity = humidity->valuedouble;
+    dataStatusGlobal_T.temperature = temperature->valuedouble;
+    dataStatusGlobal_T.humidity = humidity->valuedouble;
 
     const cJSON *outputs = cJSON_GetObjectItemCaseSensitive(receiveData, "outputs");
     const cJSON *output = NULL;
 
     int counter = 0;
-    outputsSize = cJSON_GetArraySize(outputs);
-    dataStatusGlobal.outputs = malloc((outputsSize + 1) * sizeof(Item));
+    outputsSize_T = cJSON_GetArraySize(outputs);
+    dataStatusGlobal_T.outputs = malloc((outputsSize_T + 1) * sizeof(Item));
 
     cJSON_ArrayForEach(output, outputs) {
         cJSON *type = cJSON_GetObjectItemCaseSensitive(output, "type");
@@ -87,15 +98,15 @@ void parseData(char *buffer) {
         cJSON *status = cJSON_GetObjectItemCaseSensitive(output, "status");
 
         int typeStringLength = strlen(type->valuestring);
-        dataStatusGlobal.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
-        strcpy(dataStatusGlobal.outputs[counter].type, type->valuestring);
+        dataStatusGlobal_T.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_T.outputs[counter].type, type->valuestring);
 
         int tagStringLength = strlen(tag->valuestring);
-        dataStatusGlobal.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
-        strcpy(dataStatusGlobal.outputs[counter].tag, tag->valuestring);
+        dataStatusGlobal_T.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_T.outputs[counter].tag, tag->valuestring);
 
-        dataStatusGlobal.outputs[counter].gpioPin = gpio->valueint;
-        dataStatusGlobal.outputs[counter].gpioPin = status->valueint;
+        dataStatusGlobal_T.outputs[counter].gpioPin = gpio->valueint;
+        dataStatusGlobal_T.outputs[counter].gpioPin = status->valueint;
 
         counter++;
     }
@@ -104,8 +115,8 @@ void parseData(char *buffer) {
     const cJSON *input = NULL;
 
     counter = 0;
-    inputsSize = cJSON_GetArraySize(inputs);
-    dataStatusGlobal.inputs = malloc((inputsSize + 1) * sizeof(Item));
+    inputsSize_T = cJSON_GetArraySize(inputs);
+    dataStatusGlobal_T.inputs = malloc((inputsSize_T + 1) * sizeof(Item));
 
     cJSON_ArrayForEach(input, inputs) {
         cJSON *type = cJSON_GetObjectItemCaseSensitive(input, "type");
@@ -114,36 +125,129 @@ void parseData(char *buffer) {
         cJSON *status = cJSON_GetObjectItemCaseSensitive(input, "status");
 
         int typeStringLength = strlen(type->valuestring);
-        dataStatusGlobal.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
-        strcpy(dataStatusGlobal.inputs[counter].type, type->valuestring);
+        dataStatusGlobal_T.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_T.inputs[counter].type, type->valuestring);
 
         int tagStringLength = strlen(tag->valuestring);
-        dataStatusGlobal.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
-        strcpy(dataStatusGlobal.inputs[counter].tag, tag->valuestring);
+        dataStatusGlobal_T.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_T.inputs[counter].tag, tag->valuestring);
 
-        dataStatusGlobal.inputs[counter].gpioPin = gpio->valueint;
-        dataStatusGlobal.inputs[counter].gpioPin = status->valueint;
+        dataStatusGlobal_T.inputs[counter].gpioPin = gpio->valueint;
+        dataStatusGlobal_T.inputs[counter].gpioPin = status->valueint;
 
         counter++;
     }
 
-    printf("request_type: %s\n", dataStatusGlobal.request_type);
-    printf("temperature: %.1lf\n", dataStatusGlobal.temperature);
-    printf("humidity: %.1lf\n", dataStatusGlobal.humidity);
+    printf("request_type: %s\n", dataStatusGlobal_T.request_type);
+    printf("pavement: %d\n", dataStatusGlobal_T.pavement);
+    printf("temperature: %.1lf\n", dataStatusGlobal_T.temperature);
+    printf("humidity: %.1lf\n", dataStatusGlobal_T.humidity);
 
-    for (int i = 0; i < outputsSize; i++) {
-        printf("type: %s\n", dataStatusGlobal.outputs[i].type);
-        printf("tag: %s\n", dataStatusGlobal.outputs[i].tag);
-        printf("gpio: %d\n", dataStatusGlobal.outputs[i].gpioPin);
-        printf("status: %d\n", dataStatusGlobal.outputs[i].status);
+    for (int i = 0; i < outputsSize_T; i++) {
+        printf("type: %s\n", dataStatusGlobal_T.outputs[i].type);
+        printf("tag: %s\n", dataStatusGlobal_T.outputs[i].tag);
+        printf("gpio: %d\n", dataStatusGlobal_T.outputs[i].gpioPin);
+        printf("status: %d\n", dataStatusGlobal_T.outputs[i].status);
     }
 
-    for (int i = 0; i < inputsSize; i++) {
-        printf("type: %s\n", dataStatusGlobal.inputs[i].type);
-        printf("tag: %s\n", dataStatusGlobal.inputs[i].tag);
-        printf("gpio: %d\n", dataStatusGlobal.inputs[i].gpioPin);
-        printf("status: %d\n", dataStatusGlobal.inputs[i].status);
+    for (int i = 0; i < inputsSize_T; i++) {
+        printf("type: %s\n", dataStatusGlobal_T.inputs[i].type);
+        printf("tag: %s\n", dataStatusGlobal_T.inputs[i].tag);
+        printf("gpio: %d\n", dataStatusGlobal_T.inputs[i].gpioPin);
+        printf("status: %d\n", dataStatusGlobal_T.inputs[i].status);
     }
+    dataStatusGlobal_T.online = 1;
+}
+
+void parseData1(char *buffer) {
+    cJSON *receiveData = cJSON_Parse(buffer);
+
+    cJSON *request_type = cJSON_GetObjectItemCaseSensitive(receiveData, "request_type");
+    int requestTypeStringLength = strlen(request_type->valuestring);
+    dataStatusGlobal_1.request_type = malloc((requestTypeStringLength + 1) * sizeof(char));
+    strcpy(dataStatusGlobal_1.request_type, request_type->valuestring);
+
+    cJSON *pavement = cJSON_GetObjectItemCaseSensitive(receiveData, "pavement");
+    dataStatusGlobal_1.pavement = pavement->valueint;
+
+    cJSON *temperature = cJSON_GetObjectItemCaseSensitive(receiveData, "temperature");
+    cJSON *humidity = cJSON_GetObjectItemCaseSensitive(receiveData, "humidity");
+    dataStatusGlobal_1.temperature = temperature->valuedouble;
+    dataStatusGlobal_1.humidity = humidity->valuedouble;
+
+    const cJSON *outputs = cJSON_GetObjectItemCaseSensitive(receiveData, "outputs");
+    const cJSON *output = NULL;
+
+    int counter = 0;
+    outputsSize_1 = cJSON_GetArraySize(outputs);
+    dataStatusGlobal_1.outputs = malloc((outputsSize_1 + 1) * sizeof(Item));
+
+    cJSON_ArrayForEach(output, outputs) {
+        cJSON *type = cJSON_GetObjectItemCaseSensitive(output, "type");
+        cJSON *tag = cJSON_GetObjectItemCaseSensitive(output, "tag");
+        cJSON *gpio = cJSON_GetObjectItemCaseSensitive(output, "gpio");
+        cJSON *status = cJSON_GetObjectItemCaseSensitive(output, "status");
+
+        int typeStringLength = strlen(type->valuestring);
+        dataStatusGlobal_1.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_1.outputs[counter].type, type->valuestring);
+
+        int tagStringLength = strlen(tag->valuestring);
+        dataStatusGlobal_1.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_1.outputs[counter].tag, tag->valuestring);
+
+        dataStatusGlobal_1.outputs[counter].gpioPin = gpio->valueint;
+        dataStatusGlobal_1.outputs[counter].gpioPin = status->valueint;
+
+        counter++;
+    }
+
+    const cJSON *inputs = cJSON_GetObjectItemCaseSensitive(receiveData, "inputs");
+    const cJSON *input = NULL;
+
+    counter = 0;
+    inputsSize_1 = cJSON_GetArraySize(inputs);
+    dataStatusGlobal_1.inputs = malloc((inputsSize_1 + 1) * sizeof(Item));
+
+    cJSON_ArrayForEach(input, inputs) {
+        cJSON *type = cJSON_GetObjectItemCaseSensitive(input, "type");
+        cJSON *tag = cJSON_GetObjectItemCaseSensitive(input, "tag");
+        cJSON *gpio = cJSON_GetObjectItemCaseSensitive(input, "gpio");
+        cJSON *status = cJSON_GetObjectItemCaseSensitive(input, "status");
+
+        int typeStringLength = strlen(type->valuestring);
+        dataStatusGlobal_1.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_1.inputs[counter].type, type->valuestring);
+
+        int tagStringLength = strlen(tag->valuestring);
+        dataStatusGlobal_1.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal_1.inputs[counter].tag, tag->valuestring);
+
+        dataStatusGlobal_1.inputs[counter].gpioPin = gpio->valueint;
+        dataStatusGlobal_1.inputs[counter].gpioPin = status->valueint;
+
+        counter++;
+    }
+
+    printf("request_type: %s\n", dataStatusGlobal_1.request_type);
+    printf("pavement: %d\n", dataStatusGlobal_T.pavement);
+    printf("temperature: %.1lf\n", dataStatusGlobal_1.temperature);
+    printf("humidity: %.1lf\n", dataStatusGlobal_1.humidity);
+
+    for (int i = 0; i < outputsSize_1; i++) {
+        printf("type: %s\n", dataStatusGlobal_1.outputs[i].type);
+        printf("tag: %s\n", dataStatusGlobal_1.outputs[i].tag);
+        printf("gpio: %d\n", dataStatusGlobal_1.outputs[i].gpioPin);
+        printf("status: %d\n", dataStatusGlobal_1.outputs[i].status);
+    }
+
+    for (int i = 0; i < inputsSize_1; i++) {
+        printf("type: %s\n", dataStatusGlobal_1.inputs[i].type);
+        printf("tag: %s\n", dataStatusGlobal_1.inputs[i].tag);
+        printf("gpio: %d\n", dataStatusGlobal_1.inputs[i].gpioPin);
+        printf("status: %d\n", dataStatusGlobal_1.inputs[i].status);
+    }
+    dataStatusGlobal_1.online = 1;
 }
 
 void TrataClienteTCP(int socketCliente) {
@@ -161,7 +265,7 @@ void TrataClienteTCP(int socketCliente) {
             printf("Erro no recv()\n");
     }
 
-    parseData(buffer);
+    parseDataT(buffer); // TODO: verificar tipo e andar
 }
 
 void *thread_server(void *arg) {
@@ -268,6 +372,8 @@ int main (int argc, char *argv[]) {
     pthread_create(&(threads[0]), NULL, thread_server, NULL);
 //    sleep(5);
 //    pthread_create(&(threads[1]), NULL, thread_client, NULL);
+//    pthread_create(&(threads[2]), NULL, thread_ncurses, NULL);
+
 
     while (1) {
 //        printf("Teste\n");
