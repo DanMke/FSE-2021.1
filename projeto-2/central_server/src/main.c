@@ -38,6 +38,9 @@ typedef struct {
 
 DataStatus dataStatusGlobal;
 
+int outputsSize;
+int inputsSize;
+
 void finishResources() {
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_cancel(threads[i]);
@@ -55,6 +58,83 @@ void finishResources() {
     exit(0);
 }
 
+void parseData(char *buffer) {
+    cJSON *receiveData = cJSON_Parse(buffer);
+
+    cJSON *request_type = cJSON_GetObjectItemCaseSensitive(receiveData, "request_type");
+    int requestTypeStringLength = strlen(request_type->valuestring);
+    dataStatusGlobal.request_type = malloc((requestTypeStringLength + 1) * sizeof(char));
+    strcpy(dataStatusGlobal.request_type, request_type->valuestring);
+
+    const cJSON *outputs = cJSON_GetObjectItemCaseSensitive(receiveData, "outputs");
+    const cJSON *output = NULL;
+
+    int counter = 0;
+    outputsSize = cJSON_GetArraySize(outputs);
+    dataStatusGlobal.outputs = malloc((outputsSize + 1) * sizeof(Item));
+
+    cJSON_ArrayForEach(output, outputs) {
+        cJSON *type = cJSON_GetObjectItemCaseSensitive(output, "type");
+        cJSON *tag = cJSON_GetObjectItemCaseSensitive(output, "tag");
+        cJSON *gpio = cJSON_GetObjectItemCaseSensitive(output, "gpio");
+        cJSON *status = cJSON_GetObjectItemCaseSensitive(output, "status");
+
+        int typeStringLength = strlen(type->valuestring);
+        dataStatusGlobal.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal.outputs[counter].type, type->valuestring);
+
+        int tagStringLength = strlen(tag->valuestring);
+        dataStatusGlobal.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal.outputs[counter].tag, tag->valuestring);
+
+        dataStatusGlobal.outputs[counter].gpioPin = gpio->valueint;
+        dataStatusGlobal.outputs[counter].gpioPin = status->valueint;
+
+        counter++;
+    }
+
+    const cJSON *inputs = cJSON_GetObjectItemCaseSensitive(receiveData, "inputs");
+    const cJSON *input = NULL;
+
+    counter = 0;
+    inputsSize = cJSON_GetArraySize(inputs);
+    dataStatusGlobal.inputs = malloc((inputsSize + 1) * sizeof(Item));
+
+    cJSON_ArrayForEach(input, inputs) {
+        cJSON *type = cJSON_GetObjectItemCaseSensitive(input, "type");
+        cJSON *tag = cJSON_GetObjectItemCaseSensitive(input, "tag");
+        cJSON *gpio = cJSON_GetObjectItemCaseSensitive(input, "gpio");
+        cJSON *status = cJSON_GetObjectItemCaseSensitive(input, "status");
+
+        int typeStringLength = strlen(type->valuestring);
+        dataStatusGlobal.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal.inputs[counter].type, type->valuestring);
+
+        int tagStringLength = strlen(tag->valuestring);
+        dataStatusGlobal.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(dataStatusGlobal.inputs[counter].tag, tag->valuestring);
+
+        dataStatusGlobal.inputs[counter].gpioPin = gpio->valueint;
+        dataStatusGlobal.inputs[counter].gpioPin = status->valueint;
+
+        counter++;
+    }
+
+    for (int i = 0; i < outputsSize; i++) {
+        printf("type: %s\n", dataStatusGlobal.outputs[i].type);
+        printf("tag: %s\n", dataStatusGlobal.outputs[i].tag);
+        printf("gpio: %d\n", dataStatusGlobal.outputs[i].gpioPin);
+        printf("status: %d\n", dataStatusGlobal.outputs[i].status);
+    }
+
+    for (int i = 0; i < inputsSize; i++) {
+        printf("type: %s\n", dataStatusGlobal.inputs[i].type);
+        printf("tag: %s\n", dataStatusGlobal.inputs[i].tag);
+        printf("gpio: %d\n", dataStatusGlobal.inputs[i].gpioPin);
+        printf("status: %d\n", dataStatusGlobal.inputs[i].status);
+    }
+}
+
 void TrataClienteTCP(int socketCliente) {
     char buffer[1300];
     int tamanhoRecebido;
@@ -69,8 +149,8 @@ void TrataClienteTCP(int socketCliente) {
         if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
             printf("Erro no recv()\n");
     }
-    printf("receive %s\n", buffer);
 
+    parseData(buffer);
 }
 
 void *thread_server(void *arg) {

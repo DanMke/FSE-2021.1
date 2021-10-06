@@ -94,7 +94,7 @@ cJSON *createJsonDataStatus() {
 
         cJSON_AddItemToObject(output, "type", cJSON_CreateString(floorGlobal.outputs[i].type));
         cJSON_AddItemToObject(output, "tag", cJSON_CreateString(floorGlobal.outputs[i].tag));
-        cJSON_AddItemToObject(output, "gpioPin", cJSON_CreateNumber(floorGlobal.outputs[i].gpioPin));
+        cJSON_AddItemToObject(output, "gpio", cJSON_CreateNumber(floorGlobal.outputs[i].gpioPin));
         cJSON_AddItemToObject(output, "status", cJSON_CreateNumber(floorGlobal.outputs[i].status));
 
         cJSON_AddItemToArray(outputs, output);
@@ -109,7 +109,7 @@ cJSON *createJsonDataStatus() {
 
         cJSON_AddItemToObject(input, "type", cJSON_CreateString(floorGlobal.inputs[i].type));
         cJSON_AddItemToObject(input, "tag", cJSON_CreateString(floorGlobal.inputs[i].tag));
-        cJSON_AddItemToObject(input, "gpioPin", cJSON_CreateNumber(floorGlobal.inputs[i].gpioPin));
+        cJSON_AddItemToObject(input, "gpio", cJSON_CreateNumber(floorGlobal.inputs[i].gpioPin));
         cJSON_AddItemToObject(input, "status", cJSON_CreateNumber(floorGlobal.inputs[i].status));
 
         cJSON_AddItemToArray(inputs, input);
@@ -121,17 +121,17 @@ cJSON *createJsonDataStatus() {
 }
 
 void TrataClienteTCP(int socketCliente) {
-    char buffer[16];
+    char buffer[1300];
     int tamanhoRecebido;
 
-    if((tamanhoRecebido = recv(socketCliente, buffer, 16, 0)) < 0)
+    if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
         printf("Erro no recv()\n");
 
     while (tamanhoRecebido > 0) {
         if(send(socketCliente, buffer, tamanhoRecebido, 0) != tamanhoRecebido)
             printf("Erro no envio - send()\n");
 
-        if((tamanhoRecebido = recv(socketCliente, buffer, 16, 0)) < 0)
+        if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
             printf("Erro no recv()\n");
     }
     printf("receive %s\n", buffer);
@@ -215,22 +215,23 @@ void *thread_client(void *arg) {
         char *parseDataStatus = cJSON_Print(dataStatus);
         tamanhoMensagem = strlen(parseDataStatus);
 
-        char *buffer = malloc((tamanhoMensagem + 1) * sizeof(char));
+        char *buffer = malloc((tamanhoMensagem) * sizeof(char));
 
-        printf("tamanho da mensagem: %d\n", tamanhoMensagem);
+//        printf("tamanho da mensagem: %d\n", tamanhoMensagem);
 
         if(send(clienteSocket, parseDataStatus, tamanhoMensagem, 0) != tamanhoMensagem)
             printf("Erro no envio: numero de bytes enviados diferente do esperado\n");
 
         totalBytesRecebidos = 0;
         while(totalBytesRecebidos < tamanhoMensagem) {
-            if((bytesRecebidos = recv(clienteSocket, buffer, 16-1, 0)) <= 0)
+            if((bytesRecebidos = recv(clienteSocket, buffer, 1300-1, 0)) <= 0)
                 printf("Não recebeu o total de bytes enviados\n");
             totalBytesRecebidos += bytesRecebidos;
             buffer[bytesRecebidos] = '\0';
-            printf("%s\n", buffer);
+//            printf("%s\n", buffer);
         }
         close(clienteSocket);
+        free(buffer);
 
         sleep(1);
     }
@@ -282,14 +283,11 @@ Floor getJsonData(char *buffer) {
 
     cJSON *ip = cJSON_GetObjectItemCaseSensitive(fileData, "ip");
     int ipStringLength = strlen(ip->valuestring);
-    printf("teste: %d\n", ipStringLength);
-
     floor_.ip = malloc((ipStringLength + 1) * sizeof(char));
     strcpy(floor_.ip, ip->valuestring);
 
     cJSON *name = cJSON_GetObjectItemCaseSensitive(fileData, "nome");
     int nameStringLength = strlen(name->valuestring);
-
     floor_.name = malloc((nameStringLength + 1) * sizeof(char));
     strcpy(floor_.name, name->valuestring);
 
