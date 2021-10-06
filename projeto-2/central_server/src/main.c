@@ -32,6 +32,8 @@ typedef struct {
 
 typedef struct {
     char *request_type;
+    float temperature;
+    float humidity;
     Item *outputs;
     Item *inputs;
 } DataStatus;
@@ -65,6 +67,11 @@ void parseData(char *buffer) {
     int requestTypeStringLength = strlen(request_type->valuestring);
     dataStatusGlobal.request_type = malloc((requestTypeStringLength + 1) * sizeof(char));
     strcpy(dataStatusGlobal.request_type, request_type->valuestring);
+
+    cJSON *temperature = cJSON_GetObjectItemCaseSensitive(receiveData, "temperature");
+    cJSON *humidity = cJSON_GetObjectItemCaseSensitive(receiveData, "humidity");
+    dataStatusGlobal.temperature = temperature->valuedouble;
+    dataStatusGlobal.humidity = humidity->valuedouble;
 
     const cJSON *outputs = cJSON_GetObjectItemCaseSensitive(receiveData, "outputs");
     const cJSON *output = NULL;
@@ -120,6 +127,10 @@ void parseData(char *buffer) {
         counter++;
     }
 
+    printf("request_type: %s\n", dataStatusGlobal.request_type);
+    printf("temperature: %.1lf\n", dataStatusGlobal.temperature);
+    printf("humidity: %.1lf\n", dataStatusGlobal.humidity);
+
     for (int i = 0; i < outputsSize; i++) {
         printf("type: %s\n", dataStatusGlobal.outputs[i].type);
         printf("tag: %s\n", dataStatusGlobal.outputs[i].tag);
@@ -136,17 +147,17 @@ void parseData(char *buffer) {
 }
 
 void TrataClienteTCP(int socketCliente) {
-    char buffer[1300];
+    char buffer[1350];
     int tamanhoRecebido;
 
-    if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
+    if((tamanhoRecebido = recv(socketCliente, buffer, 1350, 0)) < 0)
         printf("Erro no recv()\n");
 
     while (tamanhoRecebido > 0) {
         if(send(socketCliente, buffer, tamanhoRecebido, 0) != tamanhoRecebido)
             printf("Erro no envio - send()\n");
 
-        if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
+        if((tamanhoRecebido = recv(socketCliente, buffer, 1350, 0)) < 0)
             printf("Erro no recv()\n");
     }
 

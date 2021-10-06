@@ -86,6 +86,8 @@ cJSON *createJsonDataStatus() {
     cJSON *dataStatus = cJSON_CreateObject();
 
     cJSON_AddItemToObject(dataStatus, "request_type", cJSON_CreateString("DATA_STATUS"));
+    cJSON_AddItemToObject(dataStatus, "temperature", cJSON_CreateNumber(dht22.celsiusTemperature));
+    cJSON_AddItemToObject(dataStatus, "humidity", cJSON_CreateNumber(dht22.humidity));
 
     cJSON *outputs = cJSON_CreateArray();
 
@@ -121,17 +123,17 @@ cJSON *createJsonDataStatus() {
 }
 
 void TrataClienteTCP(int socketCliente) {
-    char buffer[1300];
+    char buffer[1350];
     int tamanhoRecebido;
 
-    if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
+    if((tamanhoRecebido = recv(socketCliente, buffer, 1350, 0)) < 0)
         printf("Erro no recv()\n");
 
     while (tamanhoRecebido > 0) {
         if(send(socketCliente, buffer, tamanhoRecebido, 0) != tamanhoRecebido)
             printf("Erro no envio - send()\n");
 
-        if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
+        if((tamanhoRecebido = recv(socketCliente, buffer, 1350, 0)) < 0)
             printf("Erro no recv()\n");
     }
     printf("receive %s\n", buffer);
@@ -215,7 +217,7 @@ void *thread_client(void *arg) {
         char *parseDataStatus = cJSON_Print(dataStatus);
         tamanhoMensagem = strlen(parseDataStatus);
 
-        char *buffer = malloc((tamanhoMensagem) * sizeof(char));
+        char *buffer = malloc((tamanhoMensagem + 1) * sizeof(char));
 
 //        printf("tamanho da mensagem: %d\n", tamanhoMensagem);
 
@@ -224,7 +226,7 @@ void *thread_client(void *arg) {
 
         totalBytesRecebidos = 0;
         while(totalBytesRecebidos < tamanhoMensagem) {
-            if((bytesRecebidos = recv(clienteSocket, buffer, 1300-1, 0)) <= 0)
+            if((bytesRecebidos = recv(clienteSocket, buffer, 1350-1, 0)) <= 0)
                 printf("Não recebeu o total de bytes enviados\n");
             totalBytesRecebidos += bytesRecebidos;
             buffer[bytesRecebidos] = '\0';
