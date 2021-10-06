@@ -28,6 +28,7 @@ typedef struct {
     char *type;
     char *tag;
     int gpioPin;
+    int status;
 } Item;
 
 typedef struct {
@@ -46,7 +47,10 @@ uint8_t dht_pin = 28;  // 28 Terreo e 29 1o Andar
 
 pthread_t threads[NUM_THREADS];
 
+Floor floorGlobal;
+
 void finishResources() {
+
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_cancel(threads[i]);
     }
@@ -56,11 +60,64 @@ void finishResources() {
 
     close(servidorSocket);
 
+    for (int i = 0; i < outputsSize; i++) {
+        free(floorGlobal.outputs[i].type);
+        free(floorGlobal.outputs[i].tag);
+    }
+
+    for (int i = 0; i < inputsSize; i++) {
+        free(floorGlobal.inputs[i].type);
+        free(floorGlobal.inputs[i].tag);
+    }
+
+    free(floorGlobal.outputs);
+    free(floorGlobal.inputs);
+    free(floorGlobal.ip);
+    free(floorGlobal.name);
+
     sleep(1);
 
     printf("Finished\n");
 
     exit(0);
+}
+
+cJSON *createJsonDataStatus() {
+    cJSON *dataStatus = cJSON_CreateObject();
+
+    cJSON_AddItemToObject(dataStatus, "request_type", cJSON_CreateString("DATA_STATUS"));
+
+    cJSON *outputs = cJSON_CreateArray();
+
+    for (int i = 0; i < outputsSize; i++) {
+        cJSON *output = cJSON_CreateObject();
+
+        cJSON_AddItemToObject(output, "type", cJSON_CreateString(floorGlobal.outputs[i].type));
+        cJSON_AddItemToObject(output, "tag", cJSON_CreateString(floorGlobal.outputs[i].tag));
+        cJSON_AddItemToObject(output, "gpioPin", cJSON_CreateNumber(floorGlobal.outputs[i].gpioPin));
+        cJSON_AddItemToObject(output, "status", cJSON_CreateNumber(floorGlobal.outputs[i].status));
+
+        cJSON_AddItemToArray(outputs, output);
+    }
+
+    cJSON_AddItemToObject(dataStatus, "outputs", outputs);
+
+    cJSON *inputs = cJSON_CreateArray();
+
+    for (int i = 0; i < inputsSize; i++) {
+        cJSON *input = cJSON_CreateObject();
+
+        cJSON_AddItemToObject(input, "type", cJSON_CreateString(floorGlobal.inputs[i].type));
+        cJSON_AddItemToObject(input, "tag", cJSON_CreateString(floorGlobal.inputs[i].tag));
+        cJSON_AddItemToObject(input, "gpioPin", cJSON_CreateNumber(floorGlobal.inputs[i].gpioPin));
+        cJSON_AddItemToObject(input, "status", cJSON_CreateNumber(floorGlobal.inputs[i].status));
+
+        cJSON_AddItemToArray(inputs, input);
+    }
+
+    cJSON_AddItemToObject(dataStatus, "inputs", inputs);
+
+    return dataStatus;
 }
 
 void TrataClienteTCP(int socketCliente) {
@@ -130,8 +187,6 @@ void *thread_client(void *arg) {
         struct sockaddr_in servidorAddr;
         unsigned short servidorPorta;
         char *IP_Servidor;
-        char *mensagem;
-        char buffer[16];
         unsigned int tamanhoMensagem;
 
         int bytesRecebidos;
@@ -139,7 +194,6 @@ void *thread_client(void *arg) {
 
         IP_Servidor = IP_CENTRAL_SERVER;
         servidorPorta = PORT_CENTRAL_SERVER;
-        mensagem = "teste d to c";
 
         // Criar Socket
         if((clienteSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -156,9 +210,16 @@ void *thread_client(void *arg) {
                    sizeof(servidorAddr)) < 0)
             printf("Erro no connect()\n");
 
-        tamanhoMensagem = strlen(mensagem);
+        cJSON *dataStatus = createJsonDataStatus();
 
-        if(send(clienteSocket, mensagem, tamanhoMensagem, 0) != tamanhoMensagem)
+        char *parseDataStatus = cJSON_Print(dataStatus);
+        tamanhoMensagem = strlen(parseDataStatus);
+
+        char *buffer = malloc((tamanhoMensagem + 1) * sizeof(char));
+
+        printf("tamanho da mensagem: %d\n", tamanhoMensagem);
+
+        if(send(clienteSocket, parseDataStatus, tamanhoMensagem, 0) != tamanhoMensagem)
             printf("Erro no envio: numero de bytes enviados diferente do esperado\n");
 
         totalBytesRecebidos = 0;
@@ -215,7 +276,7 @@ char* readFile(char *filename) {
 }
 
 Floor getJsonData(char *buffer) {
-    Floor floor;
+    Floor floor_;
 
     cJSON *fileData = cJSON_Parse(buffer);
 
@@ -223,27 +284,24 @@ Floor getJsonData(char *buffer) {
     int ipStringLength = strlen(ip->valuestring);
     printf("teste: %d\n", ipStringLength);
 
-    floor.ip = malloc((ipStringLength + 1) * sizeof(char));
-    strcpy(floor.ip, ip->valuestring);
-    printf("teste: %s\n", floor.ip);
+    floor_.ip = malloc((ipStringLength + 1) * sizeof(char));
+    strcpy(floor_.ip, ip->valuestring);
 
     cJSON *name = cJSON_GetObjectItemCaseSensitive(fileData, "nome");
     int nameStringLength = strlen(name->valuestring);
-    printf("teste: %d\n", nameStringLength);
 
-    floor.name = malloc((nameStringLength + 1) * sizeof(char));
-    strcpy(floor.name, name->valuestring);
-    printf("teste: %s\n", floor.name);
+    floor_.name = malloc((nameStringLength + 1) * sizeof(char));
+    strcpy(floor_.name, name->valuestring);
 
     cJSON *port = cJSON_GetObjectItemCaseSensitive(fileData, "porta");
-    floor.port = port->valueint;
+    floor_.port = port->valueint;
 
     const cJSON *outputs = cJSON_GetObjectItemCaseSensitive(fileData, "outputs");
     const cJSON *output = NULL;
 
     int counter = 0;
     outputsSize = cJSON_GetArraySize(outputs);
-    floor.outputs = malloc((outputsSize + 1) * sizeof(Item));
+    floor_.outputs = malloc((outputsSize + 1) * sizeof(Item));
 
     cJSON_ArrayForEach(output, outputs) {
         cJSON *type = cJSON_GetObjectItemCaseSensitive(output, "type");
@@ -251,14 +309,14 @@ Floor getJsonData(char *buffer) {
         cJSON *gpio = cJSON_GetObjectItemCaseSensitive(output, "gpio");
 
         int typeStringLength = strlen(type->valuestring);
-        floor.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
-        strcpy(floor.outputs[counter].type, type->valuestring);
+        floor_.outputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(floor_.outputs[counter].type, type->valuestring);
 
         int tagStringLength = strlen(tag->valuestring);
-        floor.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
-        strcpy(floor.outputs[counter].tag, tag->valuestring);
+        floor_.outputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(floor_.outputs[counter].tag, tag->valuestring);
 
-        floor.outputs[counter].gpioPin = gpio->valueint;
+        floor_.outputs[counter].gpioPin = gpio->valueint;
 
         counter++;
     }
@@ -268,7 +326,7 @@ Floor getJsonData(char *buffer) {
 
     counter = 0;
     inputsSize = cJSON_GetArraySize(inputs);
-    floor.inputs = malloc((inputsSize + 1) * sizeof(Item));
+    floor_.inputs = malloc((inputsSize + 1) * sizeof(Item));
 
     cJSON_ArrayForEach(input, inputs) {
         cJSON *type = cJSON_GetObjectItemCaseSensitive(input, "type");
@@ -276,21 +334,21 @@ Floor getJsonData(char *buffer) {
         cJSON *gpio = cJSON_GetObjectItemCaseSensitive(input, "gpio");
 
         int typeStringLength = strlen(type->valuestring);
-        floor.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
-        strcpy(floor.inputs[counter].type, type->valuestring);
+        floor_.inputs[counter].type = malloc((typeStringLength + 1) * sizeof(char));
+        strcpy(floor_.inputs[counter].type, type->valuestring);
 
         int tagStringLength = strlen(tag->valuestring);
-        floor.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
-        strcpy(floor.inputs[counter].tag, tag->valuestring);
+        floor_.inputs[counter].tag = malloc((tagStringLength + 1) * sizeof(char));
+        strcpy(floor_.inputs[counter].tag, tag->valuestring);
 
-        floor.inputs[counter].gpioPin = gpio->valueint;
+        floor_.inputs[counter].gpioPin = gpio->valueint;
 
         counter++;
     }
 
     cJSON_Delete(fileData);
 
-    return floor;
+    return floor_;
 }
 
 int initWiringPi() {
@@ -305,7 +363,7 @@ int main (int argc, char *argv[]) {
 
     char *buffer = readFile("configuracao_andar_terreo.json");
 
-    Floor floor = getJsonData(buffer);
+    floorGlobal = getJsonData(buffer);
 
     free(buffer);
 
@@ -313,48 +371,33 @@ int main (int argc, char *argv[]) {
         return 1;
     }
 
-    printf("IP: %s\n", floor.ip);
-    printf("PORT: %d\n", floor.port);
-    printf("NAME: %s\n", floor.name);
+    printf("IP: %s\n", floorGlobal.ip);
+    printf("PORT: %d\n", floorGlobal.port);
+    printf("NAME: %s\n", floorGlobal.name);
 
     printf("OUTPUTS:\n");
     for (int i = 0; i < outputsSize; i++) {
-        printf("type: %s\n", floor.outputs[i].type);
-        printf("tag: %s\n", floor.outputs[i].tag);
-        printf("gpio: %d\n", floor.outputs[i].gpioPin);
+        printf("type: %s\n", floorGlobal.outputs[i].type);
+        printf("tag: %s\n", floorGlobal.outputs[i].tag);
+        printf("gpio: %d\n", floorGlobal.outputs[i].gpioPin);
 
-        pinMode(floor.outputs[i].gpioPin, OUTPUT);
-        printf("State: %d\n", digitalRead(floor.outputs[i].gpioPin));
-        digitalWrite(floor.outputs[i].gpioPin, HIGH);
-        printf("State: %d\n", digitalRead(floor.outputs[i].gpioPin));
+        pinMode(floorGlobal.outputs[i].gpioPin, OUTPUT);
+        floorGlobal.outputs[i].status = digitalRead(floorGlobal.outputs[i].gpioPin);
+        printf("State: %d\n", floorGlobal.outputs[i].status);
+//        digitalWrite(floorGlobal.outputs[i].gpioPin, HIGH);
     }
 
     printf("INPUTS:\n");
     for (int i = 0; i < inputsSize; i++) {
-        printf("type: %s\n", floor.inputs[i].type);
-        printf("tag: %s\n", floor.inputs[i].tag);
-        printf("gpio: %d\n", floor.inputs[i].gpioPin);
+        printf("type: %s\n", floorGlobal.inputs[i].type);
+        printf("tag: %s\n", floorGlobal.inputs[i].tag);
+        printf("gpio: %d\n", floorGlobal.inputs[i].gpioPin);
 
-        pinMode(floor.inputs[i].gpioPin, INPUT);
-        printf("State: %d\n", digitalRead(floor.inputs[i].gpioPin));
-        digitalWrite(floor.inputs[i].gpioPin, HIGH);
-        printf("State: %d\n", digitalRead(floor.inputs[i].gpioPin));
+        pinMode(floorGlobal.inputs[i].gpioPin, INPUT);
+        floorGlobal.inputs[i].status = digitalRead(floorGlobal.inputs[i].gpioPin);
+        printf("State: %d\n", floorGlobal.inputs[i].status);
+//        digitalWrite(floorGlobal.inputs[i].gpioPin, HIGH);
     }
-
-    for (int i = 0; i < outputsSize; i++) {
-        free(floor.outputs[i].type);
-        free(floor.outputs[i].tag);
-    }
-
-    for (int i = 0; i < inputsSize; i++) {
-        free(floor.inputs[i].type);
-        free(floor.inputs[i].tag);
-    }
-
-    free(floor.outputs);
-    free(floor.inputs);
-    free(floor.ip);
-    free(floor.name);
 
     signal(SIGINT, finishResources);
     signal(SIGSTOP, finishResources);

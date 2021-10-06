@@ -23,6 +23,21 @@ pthread_t threads[NUM_THREADS];
 
 int servidorSocket;
 
+typedef struct {
+    char *type;
+    char *tag;
+    int gpioPin;
+    int status;
+} Item;
+
+typedef struct {
+    char *request_type;
+    Item *outputs;
+    Item *inputs;
+} DataStatus;
+
+DataStatus dataStatusGlobal;
+
 void finishResources() {
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_cancel(threads[i]);
@@ -41,17 +56,17 @@ void finishResources() {
 }
 
 void TrataClienteTCP(int socketCliente) {
-    char buffer[16];
+    char buffer[1300];
     int tamanhoRecebido;
 
-    if((tamanhoRecebido = recv(socketCliente, buffer, 16, 0)) < 0)
+    if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
         printf("Erro no recv()\n");
 
     while (tamanhoRecebido > 0) {
         if(send(socketCliente, buffer, tamanhoRecebido, 0) != tamanhoRecebido)
             printf("Erro no envio - send()\n");
 
-        if((tamanhoRecebido = recv(socketCliente, buffer, 16, 0)) < 0)
+        if((tamanhoRecebido = recv(socketCliente, buffer, 1300, 0)) < 0)
             printf("Erro no recv()\n");
     }
     printf("receive %s\n", buffer);
@@ -160,8 +175,8 @@ int main (int argc, char *argv[]) {
     signal(SIGSTOP, finishResources);
 
     pthread_create(&(threads[0]), NULL, thread_server, NULL);
-    sleep(5);
-    pthread_create(&(threads[1]), NULL, thread_client, NULL);
+//    sleep(5);
+//    pthread_create(&(threads[1]), NULL, thread_client, NULL);
 
     while (1) {
 //        printf("Teste\n");
