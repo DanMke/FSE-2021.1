@@ -127,20 +127,35 @@ cJSON *createJsonDataStatus() {
 }
 
 void TrataClienteTCP(int socketCliente) {
-    char buffer[1350];
+    char buffer[500];
     int tamanhoRecebido;
 
-    if((tamanhoRecebido = recv(socketCliente, buffer, 1350, 0)) < 0)
+    if((tamanhoRecebido = recv(socketCliente, buffer, 500, 0)) < 0)
         printf("Erro no recv()\n");
 
     while (tamanhoRecebido > 0) {
         if(send(socketCliente, buffer, tamanhoRecebido, 0) != tamanhoRecebido)
             printf("Erro no envio - send()\n");
 
-        if((tamanhoRecebido = recv(socketCliente, buffer, 1350, 0)) < 0)
+        if((tamanhoRecebido = recv(socketCliente, buffer, 500, 0)) < 0)
             printf("Erro no recv()\n");
     }
-    printf("receive %s\n", buffer);
+    cJSON *receiveData = cJSON_Parse(buffer);
+
+    cJSON *request_type = cJSON_GetObjectItemCaseSensitive(receiveData, "request_type");
+
+    if (strcmp(request_type->valuestring, "CHANGE_STATUS") == 0) {
+        cJSON *gpioPin = cJSON_GetObjectItemCaseSensitive(receiveData, "gpioPin");
+        int pin = gpioPin->valueint;
+        cJSON *state = cJSON_GetObjectItemCaseSensitive(receiveData, "state");
+        int desiredState = state->valueint;
+
+        if (desiredState == 0) {
+            digitalWrite(pin, LOW);
+        } else {
+            digitalWrite(pin, HIGH);
+        }
+    }
 
 }
 
@@ -415,7 +430,6 @@ int main (int argc, char *argv[]) {
         pinMode(floorGlobal.inputs[i].gpioPin, INPUT);
         floorGlobal.inputs[i].status = digitalRead(floorGlobal.inputs[i].gpioPin);
         printf("State: %d\n", floorGlobal.inputs[i].status);
-//        digitalWrite(floorGlobal.inputs[i].gpioPin, HIGH);
     }
 
     signal(SIGINT, finishResources);

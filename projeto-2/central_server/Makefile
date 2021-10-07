@@ -1,10 +1,10 @@
 CC = gcc
-LDFLAGS = -lpthread
+LDFLAGS = -lpthread -lncurses
 BLDDIR = .
 INCDIR = $(BLDDIR)/inc
 SRCDIR = $(BLDDIR)/src
 OBJDIR = $(BLDDIR)/obj
-CFLAGS = -c -Wall -lpthread -I$(INCDIR)
+CFLAGS = -c -Wall -lpthread -lncurses -I$(INCDIR)
 SRC = $(wildcard $(SRCDIR)/*.c)
 OBJ = $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC))
 EXE = bin/bin
